@@ -68,6 +68,23 @@ func doubleWrapf() error {
 
 var rootCause = errors.New("some root cause")
 
+func runWithRecover(f func()) (err error) {
+	defer func() {
+		err = oops.Recover(recover())
+	}()
+	f()
+	return
+}
+
+func TestRecoverNil(t *testing.T) {
+	err := runWithRecover(func() {
+		// Everything's fine!
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestErrors(t *testing.T) {
 	testcases := []struct {
 		Title   string
@@ -137,7 +154,6 @@ testing.tRunner
 	testing/testing.go:123
 `,
 		},
-
 		{
 			Title: "Basic",
 			Error: a(),
@@ -241,11 +257,123 @@ testing.tRunner
 	testing/testing.go:123
 `,
 		},
+		{
+			Title: "panic nil deref",
+			Error: runWithRecover(func() {
+				var i *int
+				*i = 0
+			}),
+			Short: "runtime error: invalid memory address or nil pointer dereference",
+			Verbose: `runtime error: invalid memory address or nil pointer dereference
+
+github.com/samsarahq/go/oops_test.runWithRecover.func1: recovered panic
+	github.com/samsarahq/go/oops/oops_test.go:123
+runtime.call32
+	runtime/asm_amd64.s:123
+runtime.gopanic
+	runtime/panic.go:123
+runtime.panicmem
+	runtime/panic.go:123
+runtime.sigpanic
+	runtime/signal_unix.go:123
+github.com/samsarahq/go/oops_test.TestErrors.func1
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.runWithRecover
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+`,
+		},
+		{
+			Title: "panic string",
+			Error: runWithRecover(func() {
+				panic("bad")
+				var i *int
+				*i = 0
+			}),
+			Short: "recovered panic: bad",
+			Verbose: `recovered panic: bad
+
+github.com/samsarahq/go/oops_test.runWithRecover.func1
+	github.com/samsarahq/go/oops/oops_test.go:123
+runtime.call32
+	runtime/asm_amd64.s:123
+runtime.gopanic
+	runtime/panic.go:123
+github.com/samsarahq/go/oops_test.TestErrors.func2
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.runWithRecover
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+`,
+		},
+		{
+			Title: "panic error",
+			Error: runWithRecover(func() {
+				panic(errors.New("uh oh"))
+			}),
+			Short: "uh oh",
+			Verbose: `uh oh
+
+github.com/samsarahq/go/oops_test.runWithRecover.func1: recovered panic
+	github.com/samsarahq/go/oops/oops_test.go:123
+runtime.call32
+	runtime/asm_amd64.s:123
+runtime.gopanic
+	runtime/panic.go:123
+github.com/samsarahq/go/oops_test.TestErrors.func3
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.runWithRecover
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+`,
+		},
+		{
+			Title: "panic oops",
+			Error: runWithRecover(func() {
+				panic(oops.Errorf("help!"))
+			}),
+			Short: "help!",
+			Verbose: `help!
+
+github.com/samsarahq/go/oops_test.TestErrors.func4
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.runWithRecover
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+github.com/samsarahq/go/oops_test.runWithRecover.func1: recovered panic
+	github.com/samsarahq/go/oops/oops_test.go:123
+runtime.call32
+	runtime/asm_amd64.s:123
+runtime.gopanic
+	runtime/panic.go:123
+github.com/samsarahq/go/oops_test.TestErrors.func4
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.runWithRecover
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+`,
+		},
 	}
 
-	re := regexp.MustCompile(`\.go:\d+`)
+	re := regexp.MustCompile(`\.(go|s):\d+`)
 	for _, testcase := range testcases {
-		actualVerbose := re.ReplaceAllString(fmt.Sprint(testcase.Error), ".go:123")
+		actualVerbose := re.ReplaceAllString(fmt.Sprint(testcase.Error), `.$1:123`)
 		if actualVerbose != testcase.Verbose {
 			t.Errorf("verbose %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Verbose, actualVerbose)
 		}

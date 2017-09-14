@@ -36,15 +36,27 @@ func (e *oopsError) Error() string {
 	return buffer.String()
 }
 
+// A Frame represents a Frame in an oops callstack. The Reason is the manual
+// annotation passed to oops.Wrapf.
+type Frame struct {
+	File     string
+	Function string
+	Line     int
+	Reason   string
+}
+
 type stackWithReasons struct {
 	stack   *stack
 	reasons []string
 }
 
-// writeStackTrace unwinds a chain of oopsErrors and prints the stacktrace
-// annotated with explanatory messages.
-func (e *oopsError) writeStackTrace(w io.Writer) {
-	fmt.Fprintf(w, "%s\n\n", e.cause.Error())
+// Frames extracts all frames from an oops error. If err is not an oops error,
+// nil is returned.
+func Frames(err error) [][]Frame {
+	e, ok := err.(*oopsError)
+	if !ok {
+		return nil
+	}
 
 	// Walk the chain of oopsErrors backwards, collecting a set of stacks and
 	// reasons.
@@ -62,11 +74,15 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 		stacks[len(stacks)-1].reasons[e.index] = e.reason
 	}
 
+	parsedStacks := make([][]Frame, 0, len(stacks))
+
 	// Walk the set of stacks backwards, starting with stack most closest to the
 	// cause error.
 	for i := len(stacks) - 1; i >= 0; i-- {
 		frames := stacks[i].stack.frames
 		reasons := stacks[i].reasons
+
+		parsedFrames := make([]Frame, 0, 8)
 
 		// Iterate over the stack frames.
 		iter := runtime.CallersFrames(frames)
@@ -91,25 +107,44 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 				j++
 			}
 
-			// Print the current function.
-			if reason != "" {
-				fmt.Fprintf(w, "%s: %s\n", frame.Function, reason)
-			} else {
-				fmt.Fprintf(w, "%s\n", frame.Function)
-			}
-
-			// Print the current file.
 			file := frame.File
 			i := strings.LastIndex(file, "/src/")
 			if i >= 0 {
 				file = file[i+len("/src/"):]
 			}
-			fmt.Fprintf(w, "\t%s:%d\n", file, frame.Line)
+
+			parsedFrames = append(parsedFrames, Frame{
+				File:     file,
+				Function: frame.Function,
+				Line:     frame.Line,
+				Reason:   reason,
+			})
 		}
 
+		parsedStacks = append(parsedStacks, parsedFrames)
+	}
+	return parsedStacks
+}
+
+// writeStackTrace unwinds a chain of oopsErrors and prints the stacktrace
+// annotated with explanatory messages.
+func (e *oopsError) writeStackTrace(w io.Writer) {
+	fmt.Fprintf(w, "%s\n\n", e.cause.Error())
+
+	for i, stack := range Frames(e) {
 		// Include a newline between stacks.
 		if i > 0 {
 			fmt.Fprintf(w, "\n")
+		}
+
+		for _, frame := range stack {
+			// Print the current function.
+			if frame.Reason != "" {
+				fmt.Fprintf(w, "%s: %s\n", frame.Function, frame.Reason)
+			} else {
+				fmt.Fprintf(w, "%s\n", frame.Function)
+			}
+			fmt.Fprintf(w, "\t%s:%d\n", frame.File, frame.Line)
 		}
 	}
 }
@@ -242,4 +277,16 @@ func Cause(err error) error {
 		return e.cause
 	}
 	return err
+}
+
+// Recover recovers from a panic in a defer. If there is no panic, Recover()
+// returns nil. To use, call oops.Recover(recover()) and compare the result to nil.
+func Recover(p interface{}) error {
+	if p == nil {
+		return nil
+	}
+	if err, ok := p.(error); ok {
+		return wrapf(err, "recovered panic")
+	}
+	return wrapf(fmt.Errorf("recovered panic: %v", p), "")
 }
