@@ -1,0 +1,18 @@
+[
+  {
+    "Name": "first",
+    "Values": [
+      1,
+      "uno"
+    ]
+  },
+  {
+    "Name": "second",
+    "Values": [
+      2,
+      {
+        "Foo": "Bar"
+      }
+    ]
+  }
+]
