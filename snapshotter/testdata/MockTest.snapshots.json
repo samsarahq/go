@@ -1,0 +1,14 @@
+[
+  {
+    "Name": "good",
+    "Values": [
+      true
+    ]
+  },
+  {
+    "Name": "bad",
+    "Values": [
+      true
+    ]
+  }
+]
