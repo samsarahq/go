@@ -75,6 +75,7 @@ func do(t *testing.T, source string) string {
 			Uses:  make(map[*ast.Ident]types.Object),
 		},
 		fset: token.NewFileSet(),
+		errs: make(map[token.Pos]errinfo),
 	}
 
 	file, err := parser.ParseFile(o.fset, "main.go", source, parser.ParseComments)

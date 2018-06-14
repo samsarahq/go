@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/constant"
 	"go/importer"
@@ -25,10 +26,17 @@ func init() {
 	errorType = types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 }
 
+type errinfo struct {
+	funcname  string
+	args      []string
+	argvalues []ast.Expr
+}
+
 // oopsify holds the global state for an oopsify run.
 type oopsify struct {
 	fset *token.FileSet
 	info types.Info
+	errs map[token.Pos]errinfo
 }
 
 // oopsifyState holds the local state for an oopsify run.
@@ -154,15 +162,27 @@ func (o *oopsifyState) rewriteReturnStmt(n *ast.ReturnStmt) (ast.Node, bool) {
 
 		default:
 			// Replace all other values x with oops.Wrapf(x, "").
+			// o.info.Uses[
+			str := ""
+			var ei errinfo
+			if ident, ok := n.Results[i].(*ast.Ident); ok {
+				ei = o.errs[o.info.Uses[ident].Pos()]
+			}
+
+			str = ei.funcname
+			for _, name := range ei.args {
+				str += fmt.Sprintf(" %s=%%v", name)
+			}
+
 			n.Results[i] = &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
 					X:   ast.NewIdent("oops"),
 					Sel: ast.NewIdent("Wrapf"),
 				},
-				Args: []ast.Expr{
+				Args: append([]ast.Expr{
 					n.Results[i],
-					&ast.BasicLit{Kind: token.STRING, Value: `""`},
-				},
+					&ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(str)},
+				}, ei.argvalues...),
 			}
 		}
 	}
@@ -276,6 +296,31 @@ func (o *oopsifyState) rewriteTypeAssertExpr(n *ast.TypeAssertExpr) (ast.Node, b
 	return n, true
 }
 
+func extractIdent(e ast.Expr) string {
+	switch e := e.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		return e.Sel.Name
+	default:
+		return ""
+	}
+}
+
+func formatCallExpr(c *ast.CallExpr) string {
+	switch e := c.Fun.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		if ident := extractIdent(e.X); ident != "" {
+			return ident + "." + e.Sel.Name
+		}
+		return e.Sel.Name
+	default:
+		return ""
+	}
+}
+
 // rewrite dispatches to the appropriate rewrite call and maintains local state.
 func (o *oopsifyState) rewrite(n ast.Node) (ast.Node, bool) {
 	switch n := n.(type) {
@@ -295,6 +340,49 @@ func (o *oopsifyState) rewrite(n ast.Node) (ast.Node, bool) {
 		}
 		n.Body = astrewrite.Walk(n.Body, o.rewrite).(*ast.BlockStmt)
 		return n, false
+
+	case *ast.IfStmt:
+		if assignStmt, ok := n.Init.(*ast.AssignStmt); ok && len(assignStmt.Rhs) == 1 {
+			last := assignStmt.Lhs[len(assignStmt.Lhs)-1]
+
+			if ident, ok := last.(*ast.Ident); ok {
+				var source ast.Expr
+				var typ types.Type
+				if len(assignStmt.Lhs) == 1 {
+					source = assignStmt.Rhs[len(assignStmt.Rhs)-1]
+					typ = o.info.TypeOf(source)
+				} else {
+					source = assignStmt.Rhs[0]
+					tuple := o.info.TypeOf(source).(*types.Tuple)
+					typ = tuple.At(tuple.Len() - 1).Type()
+				}
+
+				if types.Implements(typ, errorType) {
+					if call, ok := source.(*ast.CallExpr); ok {
+						ei := errinfo{
+							funcname: formatCallExpr(call),
+						}
+
+						// log.Println(o.info.Uses[ident])
+						sig := o.info.TypeOf(call.Fun).(*types.Signature)
+						for i, arg := range call.Args {
+							if i < sig.Params().Len() {
+								if _, ok := o.info.TypeOf(arg).(*types.Basic); ok {
+									ei.args = append(ei.args, sig.Params().At(i).Name())
+									ei.argvalues = append(ei.argvalues, arg)
+									// log.Println(sig.Params().At(i).Name(), arg)
+								}
+							}
+						}
+
+						o.errs[ident.Pos()] = ei
+					}
+				}
+			}
+		}
+
+		return n, true
+
 	case *ast.FuncDecl:
 		// Track the current enclosing function.
 		o := &oopsifyState{
@@ -328,10 +416,12 @@ func main() {
 		// Initialize state.
 		o := &oopsify{
 			info: types.Info{
+				Defs:  make(map[*ast.Ident]types.Object),
 				Types: make(map[ast.Expr]types.TypeAndValue),
 				Uses:  make(map[*ast.Ident]types.Object),
 			},
 			fset: token.NewFileSet(),
+			errs: make(map[token.Pos]errinfo),
 		}
 
 		// Parse the package.
