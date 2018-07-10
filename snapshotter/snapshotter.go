@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kylelemons/godebug/diff"
 	"github.com/kylelemons/godebug/pretty"
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 type T interface {
@@ -123,7 +123,7 @@ func (s *Snapshotter) Verify() {
 			expectedNames = append(expectedNames, snapshot.Name)
 		}
 
-		if diff := pretty.Compare(expectedNames, actualNames); diff != "" {
+		if diff := diffString(expectedNames, actualNames); diff != "" {
 			s.t.Errorf("snapshot names differ:\n%s", diff)
 			return
 		}
@@ -135,7 +135,7 @@ func (s *Snapshotter) Verify() {
 			if len(expectedValue) == 1 && len(actualValue) == 1 {
 				if expectedString, ok := expectedValue[0].(string); ok {
 					if actualString, ok := actualValue[0].(string); ok {
-						if diff := diff.Diff(expectedString, actualString); diff != "" {
+						if diff := diffString(expectedString, actualString); diff != "" {
 							s.t.Errorf("snapshot %s differs:\n%s", actual[i].Name, diff)
 							s.t.Errorf("If this is intentional, you can run `go test . -rewriteSnapshots` to generate new snapshots.")
 							return
@@ -144,10 +144,29 @@ func (s *Snapshotter) Verify() {
 				}
 			}
 
-			if diff := pretty.Compare(expected[i].Values, actual[i].Values); diff != "" {
+			if diff := diffString(expected[i].Values, actual[i].Values); diff != "" {
 				s.t.Errorf("snapshot %s differs:\n%s", actual[i].Name, diff)
 				s.t.Errorf("If this is intentional, you can run `go test . -rewriteSnapshots` to generate new snapshots.")
 			}
 		}
 	}
+}
+
+func coerceToString(i interface{}) string {
+       if str, ok := i.(string); ok {
+               return str
+       }
+       return pretty.Sprint(i)
+}
+
+func diffString(a, b interface{}) string {
+       str, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+               A:        difflib.SplitLines(coerceToString(a)),
+               B:        difflib.SplitLines(coerceToString(b)),
+               FromFile: "expected",
+               ToFile:   "received",
+               Context:  1,
+       })
+
+       return str
 }
