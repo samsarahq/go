@@ -42,3 +42,8 @@ func TestSnapshotterFailed(t *testing.T) {
 		t.Errorf("expected error, got %v", m.errors)
 	}
 }
+
+func TestSnapshotterNoSnapshots(t *testing.T) {
+	ss := snapshotter.New(t)
+	ss.Verify()
+}

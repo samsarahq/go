@@ -102,6 +102,11 @@ func (s *Snapshotter) Verify() {
 		}
 
 	} else {
+		// When no snapshots file exists and no snapshots have been taken, do nothing.
+		if _, err := os.Stat(name); os.IsNotExist(err) && len(s.snapshots) == 0 {
+			return
+		}
+
 		bytes, err := ioutil.ReadFile(name)
 		if err != nil {
 			s.t.Errorf("error reading snapshots: %s", err)
