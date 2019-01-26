@@ -1,10 +1,3 @@
-// Package oops provides error values that capture stacktraces and reasons
-// when propagating errors.
-//
-// At each Wrapf of Errorf invocation, oops captures the current stack location
-// and a user defined reason for the error propagation. An oops error may travel
-// across many go stacks, e.g. when an error is propagated across goroutine boundaries.
-// This also means that Wrapf should be used anywhere error propagation occurs.
 package oops
 
 import (
