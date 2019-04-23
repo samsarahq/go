@@ -290,3 +290,12 @@ func Recover(p interface{}) error {
 	}
 	return wrapf(fmt.Errorf("recovered panic: %v", p), "")
 }
+
+// Unwrap returns the next error in the error chain.
+// If there is no next error, Unwrap returns nil.
+func (err *oopsError) Unwrap() error {
+	if err.previous != nil {
+		return err.previous
+	}
+	return nil
+}
