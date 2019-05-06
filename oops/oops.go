@@ -16,9 +16,9 @@ type stack struct {
 // A oopsError annotates a cause error with a stacktrace and an explanatory
 // message.
 type oopsError struct {
-	// The cause error.
+	// The cause error. This value points to the next wrapped non-oops error in the chain.
 	cause error
-	// The previous oopsError, if any.
+	// The previous oopsError, if any. This value is only used to follow stacktraces.
 	previous *oopsError
 	// The current stacktrace. Might be the same as previous' stacktrace if that
 	// is another oopsError.
@@ -34,6 +34,15 @@ func (e *oopsError) Error() string {
 	var buffer bytes.Buffer
 	e.writeStackTrace(&buffer)
 	return buffer.String()
+}
+
+// Unwrap returns the next error in the error chain.
+// If there is no next error, Unwrap returns nil.
+func (err *oopsError) Unwrap() error {
+	if err.cause != nil {
+		return err.cause
+	}
+	return nil
 }
 
 // A Frame represents a Frame in an oops callstack. The Reason is the manual
@@ -53,8 +62,8 @@ type stackWithReasons struct {
 // Frames extracts all frames from an oops error. If err is not an oops error,
 // nil is returned.
 func Frames(err error) [][]Frame {
-	e, ok := err.(*oopsError)
-	if !ok {
+	var e *oopsError
+	if ok := As(err, &e); !ok {
 		return nil
 	}
 
@@ -163,16 +172,25 @@ func isPrefix(a []uintptr, b []uintptr) bool {
 }
 
 func wrapf(err error, reason string) error {
-	var cause error
+	cause := err
 	var previous *oopsError
 
 	var st *stack
 	var index int
 	found := false
 
-	if e, ok := err.(*oopsError); ok {
-		cause = e.cause
+	// Find the previous error in our input, if any.
+	var e *oopsError
+	if ok := As(err, &e); ok {
 		previous = e
+
+		// If the input error was not an oops error, then we want our new oops error
+		// to point to it, even if it goes on to point to other oops errors. Otherwise,
+		// we're in the case of wrapping an already oops-wrapped error and we can point to
+		// the same next error.
+		if _, ok := err.(*oopsError); ok {
+			cause = e.cause
+		}
 
 		// Figure out where we are in the existing callstack. Since Wrapf isn't
 		// guaranteed to be called at every stack frame, we need to search to find
@@ -213,8 +231,6 @@ func wrapf(err error, reason string) error {
 			index++
 		}
 
-	} else {
-		cause = err
 	}
 
 	if !found {
