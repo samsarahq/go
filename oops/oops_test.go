@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/samsarahq/go/oops"
+	"github.com/stretchr/testify/assert"
 )
 
 func z() error {
@@ -74,6 +75,33 @@ func runWithRecover(f func()) (err error) {
 	}()
 	f()
 	return
+}
+
+type wrapperErr struct {
+	inner error
+}
+
+func (e *wrapperErr) Unwrap() error {
+	return e.inner
+}
+
+func (e *wrapperErr) Error() string {
+	return "wrapper"
+}
+
+type baseErr struct{}
+
+func (e *baseErr) Error() string {
+	return "base"
+}
+
+func chain() error {
+	base := &baseErr{}
+	a := oops.Wrapf(base, "a")
+	b := oops.Wrapf(a, "b")
+	middle := &wrapperErr{inner: b}
+	c := oops.Wrapf(middle, "c")
+	return oops.Wrapf(c, "d")
 }
 
 func TestRecoverNil(t *testing.T) {
@@ -369,6 +397,27 @@ testing.tRunner
 	testing/testing.go:123
 `,
 		},
+		{
+			Title: "chain oops",
+			Error: chain(),
+			Short: "wrapper",
+			Verbose: `wrapper
+
+github.com/samsarahq/go/oops_test.chain: c
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+github.com/samsarahq/go/oops_test.chain: d
+	github.com/samsarahq/go/oops/oops_test.go:123
+github.com/samsarahq/go/oops_test.TestErrors
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+`,
+		},
 	}
 
 	re := regexp.MustCompile(`\.(go|s):\d+`)
@@ -388,4 +437,21 @@ testing.tRunner
 			t.Errorf("root cause %s:\nexpected:\n%v\nactual:\n%v", testcase.Title, testcase.Cause, actualCause)
 		}
 	}
+}
+
+func TestCause(t *testing.T) {
+	base := &baseErr{}
+	a := oops.Wrapf(base, "a")
+	b := oops.Wrapf(a, "b")
+	middle := &wrapperErr{inner: b}
+	c := oops.Wrapf(middle, "c")
+	d := oops.Wrapf(c, "d")
+
+	assert.Equal(t, base, oops.Cause(base))
+	assert.Equal(t, base, oops.Cause(a))
+	assert.Equal(t, base, oops.Cause(b))
+
+	assert.Equal(t, middle, oops.Cause(middle))
+	assert.Equal(t, middle, oops.Cause(c))
+	assert.Equal(t, middle, oops.Cause(d))
 }
