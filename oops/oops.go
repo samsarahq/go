@@ -16,8 +16,8 @@ type stack struct {
 // A oopsError annotates a cause error with a stacktrace and an explanatory
 // message.
 type oopsError struct {
-	// The cause error. This value points to the next wrapped non-oops error in the chain.
-	cause error
+	// inner is the next non-oops error in the chain.
+	inner error
 	// The previous oopsError, if any. This value is only used to follow stacktraces.
 	previous *oopsError
 	// The current stacktrace. Might be the same as previous' stacktrace if that
@@ -39,8 +39,10 @@ func (e *oopsError) Error() string {
 // Unwrap returns the next error in the error chain.
 // If there is no next error, Unwrap returns nil.
 func (err *oopsError) Unwrap() error {
-	if err.cause != nil {
-		return err.cause
+	// Unwrap doesn't follow the err.previous chain because that chain is only
+	// used for constructing Frames. err.inner is used for following wrapped error types.
+	if err.inner != nil {
+		return err.inner
 	}
 	return nil
 }
@@ -138,7 +140,7 @@ func Frames(err error) [][]Frame {
 // writeStackTrace unwinds a chain of oopsErrors and prints the stacktrace
 // annotated with explanatory messages.
 func (e *oopsError) writeStackTrace(w io.Writer) {
-	fmt.Fprintf(w, "%s\n\n", e.cause.Error())
+	fmt.Fprintf(w, "%s\n\n", e.inner.Error())
 
 	for i, stack := range Frames(e) {
 		// Include a newline between stacks.
@@ -172,7 +174,7 @@ func isPrefix(a []uintptr, b []uintptr) bool {
 }
 
 func wrapf(err error, reason string) error {
-	cause := err
+	inner := err
 	var previous *oopsError
 
 	var st *stack
@@ -189,7 +191,7 @@ func wrapf(err error, reason string) error {
 		// we're in the case of wrapping an already oops-wrapped error and we can point to
 		// the same next error.
 		if _, ok := err.(*oopsError); ok {
-			cause = e.cause
+			inner = e.inner
 		}
 
 		// Figure out where we are in the existing callstack. Since Wrapf isn't
@@ -246,7 +248,7 @@ func wrapf(err error, reason string) error {
 	}
 
 	return &oopsError{
-		cause:    cause,
+		inner:    inner,
 		previous: previous,
 		stack:    st,
 		reason:   reason,
@@ -290,7 +292,7 @@ func Wrapf(err error, format string, a ...interface{}) error {
 // you know than EOF error is fine, you can handle it with Cause.
 func Cause(err error) error {
 	if e, ok := err.(*oopsError); ok {
-		return e.cause
+		return e.inner
 	}
 	return err
 }
