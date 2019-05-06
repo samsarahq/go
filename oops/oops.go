@@ -140,7 +140,12 @@ func Frames(err error) [][]Frame {
 // writeStackTrace unwinds a chain of oopsErrors and prints the stacktrace
 // annotated with explanatory messages.
 func (e *oopsError) writeStackTrace(w io.Writer) {
-	fmt.Fprintf(w, "%s\n\n", e.inner.Error())
+	var base error
+	for err := error(e); err != nil; err = Unwrap(err) {
+		base = err
+	}
+
+	fmt.Fprintf(w, "%s\n\n", base.Error())
 
 	for i, stack := range Frames(e) {
 		// Include a newline between stacks.
