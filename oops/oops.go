@@ -1,3 +1,5 @@
+// +build !js
+
 package oops
 
 import (
@@ -45,15 +47,6 @@ func (err *oopsError) Unwrap() error {
 		return err.inner
 	}
 	return nil
-}
-
-// A Frame represents a Frame in an oops callstack. The Reason is the manual
-// annotation passed to oops.Wrapf.
-type Frame struct {
-	File     string
-	Function string
-	Line     int
-	Reason   string
 }
 
 type stackWithReasons struct {
