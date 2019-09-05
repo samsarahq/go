@@ -541,3 +541,28 @@ func TestAs(t *testing.T) {
 	assert.True(t, oops.As(d, &checkWrapper))
 	assert.Equal(t, middle, checkWrapper)
 }
+
+func TestOopsSkipFrame(t *testing.T) {
+	err := getTestError().(*oopsError)
+	newErr := SkipFrames(err, 1).(*oopsError)
+	assert.Equal(t, err.stack.frames[1:], newErr.stack.frames)
+}
+
+func TestOopsSkipFrameWithInvalidInput(t *testing.T) {
+	err := getTestError().(*oopsError)
+	newErr := SkipFrames(err, -1).(*oopsError)
+	newErr1 := SkipFrames(err, 0).(*oopsError)
+	assert.Equal(t, err.stack.frames, newErr.stack.frames)
+	assert.Equal(t, err.stack.frames, newErr1.stack.frames)
+}
+
+func TestOopsSkipMoreFramesThanExists(t *testing.T) {
+	err := getTestError().(*oopsError)
+	newErr := SkipFrames(err, 10000).(*oopsError)
+	assert.Equal(t, err.stack.frames, newErr.stack.frames)
+}
+
+func getTestError() error {
+	return Errorf("test")
+}
+

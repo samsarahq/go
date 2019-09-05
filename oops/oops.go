@@ -130,6 +130,32 @@ func Frames(err error) [][]Frame {
 	return parsedStacks
 }
 
+// SkipFrames skips numFrames from the stack trace and returns a new copy of the error.
+// If numFrames is greater than the number of frames in err, SkipFrames will do nothing and return the original err.
+func SkipFrames(err error, numFrames int) error {
+	var e *oopsError
+	if ok := As(err, &e); !ok || numFrames <= 0 {
+		return err
+	}
+	st := e.stack
+	if st == nil {
+		return err
+	}
+	numLeftoverFrames := len(st.frames) - int(numFrames)
+	if numLeftoverFrames < 0 {
+		return err
+	}
+	frames := make([]uintptr, numLeftoverFrames)
+	copy(frames, st.frames[numFrames:])
+	return &oopsError{
+		inner:    e.inner,
+		previous: e.previous,
+		stack:    &stack{frames: frames},
+		reason:   e.reason,
+		index:    e.index,
+	}
+}
+
 // writeStackTrace unwinds a chain of oopsErrors and prints the stacktrace
 // annotated with explanatory messages.
 func (e *oopsError) writeStackTrace(w io.Writer) {
