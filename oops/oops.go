@@ -38,6 +38,17 @@ func (e *oopsError) Error() string {
 	return buffer.String()
 }
 
+// Outputs the stacktrace for n frames
+func (e *oopsError) ErrorFrame(n int) string {
+	var buffer bytes.Buffer
+	fmt.Fprintf(&buffer, "%s\n\n", e..Error())
+	framesLength := len(Frames(e))
+	for i := 0; i < framesLength && i < n; i++ {
+		writeFrameTrace(&buffer, Frames(e)[i])
+	}
+	return buffer.String()
+}
+
 // Unwrap returns the next error in the error chain.
 // If there is no next error, Unwrap returns nil.
 func (err *oopsError) Unwrap() error {
@@ -171,16 +182,19 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 		if i > 0 {
 			fmt.Fprintf(w, "\n")
 		}
+		writeFrameTrace(w, stack)
+	}
+}
 
-		for _, frame := range stack {
-			// Print the current function.
-			if frame.Reason != "" {
-				fmt.Fprintf(w, "%s: %s\n", frame.Function, frame.Reason)
-			} else {
-				fmt.Fprintf(w, "%s\n", frame.Function)
-			}
-			fmt.Fprintf(w, "\t%s:%d\n", frame.File, frame.Line)
+func writeFrameTrace(w io.Writer, frames []Frame) {
+	for _, frame := range stack {
+		// Print the current function.
+		if frame.Reason != "" {
+			fmt.Fprintf(w, "%s: %s\n", frame.Function, frame.Reason)
+		} else {
+			fmt.Fprintf(w, "%s\n", frame.Function)
 		}
+		fmt.Fprintf(w, "\t%s:%d\n", frame.File, frame.Line)
 	}
 }
 
