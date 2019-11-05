@@ -184,6 +184,20 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 	}
 }
 
+// Reason returns the reason chain of the error. Output can be an empty string.
+// NOTE: This does not include inner error in the reason message
+func (e *oopsError) Reason() string {
+	output := []string{}
+	err := e
+	for err != nil {
+		if err.reason != "" {
+			output = append(output, err.reason)
+		}
+		err = err.previous
+	}
+	return strings.Join(output, " : ")
+}
+
 // isPrefix checks if a is a prefix of b.
 func isPrefix(a []uintptr, b []uintptr) bool {
 	if len(a) > len(b) {

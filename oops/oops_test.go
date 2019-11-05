@@ -543,26 +543,51 @@ func TestAs(t *testing.T) {
 }
 
 func TestOopsSkipFrame(t *testing.T) {
-	err := getTestError().(*oopsError)
-	newErr := SkipFrames(err, 1).(*oopsError)
-	assert.Equal(t, err.stack.frames[1:], newErr.stack.frames)
+	err := getTestError()
+	newErr := oops.SkipFrames(err, 1)
+	oldFrames := oops.Frames(err)
+
+	newFrames := oops.Frames(newErr)
+	assert.Equal(t, oldFrames[0][1:], newFrames[0])
 }
 
 func TestOopsSkipFrameWithInvalidInput(t *testing.T) {
-	err := getTestError().(*oopsError)
-	newErr := SkipFrames(err, -1).(*oopsError)
-	newErr1 := SkipFrames(err, 0).(*oopsError)
-	assert.Equal(t, err.stack.frames, newErr.stack.frames)
-	assert.Equal(t, err.stack.frames, newErr1.stack.frames)
+	err := getTestError()
+	oldFrames := oops.Frames(err)
+	newErr := oops.SkipFrames(err, -1)
+	newErr1 := oops.SkipFrames(err, 0)
+	assert.Equal(t, oldFrames, oops.Frames(newErr))
+	assert.Equal(t, oldFrames, oops.Frames(newErr1))
 }
 
 func TestOopsSkipMoreFramesThanExists(t *testing.T) {
-	err := getTestError().(*oopsError)
-	newErr := SkipFrames(err, 10000).(*oopsError)
-	assert.Equal(t, err.stack.frames, newErr.stack.frames)
+	err := getTestError()
+	oldFrames := oops.Frames(err)
+	newErr := oops.SkipFrames(err, 10000)
+	assert.Equal(t, oldFrames, oops.Frames(newErr))
 }
 
 func getTestError() error {
-	return Errorf("test")
+	return oops.Errorf("test")
 }
 
+type reasonErr interface {
+	Reason() string
+	Error() string
+}
+
+func TestReasonEmptyString(t *testing.T) {
+	err := oops.Errorf("a").(reasonErr)
+	err2 := oops.Wrapf(err, "").(reasonErr)
+	assert.Equal(t, "", err.Reason())
+	assert.Equal(t, "", err2.Reason())
+}
+
+func TestStackedOopsErrors(t *testing.T) {
+	err := fmt.Errorf("Error")
+	err = oops.Wrapf(err, "d")
+	err = oops.Wrapf(err, "c")
+	err = oops.Wrapf(err, "b")
+	e := oops.Wrapf(err, "a").(reasonErr)
+	assert.Equal(t, "a : b : c : d", e.Reason())
+}
