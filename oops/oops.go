@@ -195,7 +195,7 @@ func (e *oopsError) Reason() string {
 		}
 		err = err.previous
 	}
-	return strings.Join(output, " : ")
+	return strings.Join(output, ": ")
 }
 
 // isPrefix checks if a is a prefix of b.
