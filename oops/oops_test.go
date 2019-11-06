@@ -589,5 +589,5 @@ func TestStackedOopsErrors(t *testing.T) {
 	err = oops.Wrapf(err, "c")
 	err = oops.Wrapf(err, "b")
 	e := oops.Wrapf(err, "a").(reasonErr)
-	assert.Equal(t, "a : b : c : d", e.Reason())
+	assert.Equal(t, "a: b: c: d", e.Reason())
 }
