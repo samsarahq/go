@@ -86,6 +86,8 @@ func (s *Snapshotter) Verify() {
 		nameSuffix = "_" + strings.Replace(s.name, "/", "-", -1)
 	}
 	name := filepath.Join("testdata", strings.Replace(s.t.Name(), "/", "-", -1)+nameSuffix+".snapshots.json")
+	// Strip out all ":" as Bazel is unhappy with them.
+	name = strings.Replace(name, ":", "_", -1)
 	if *rewrite {
 		if err := os.MkdirAll("testdata", 0755); err != nil {
 			s.t.Errorf("error creating testdata directory: %s", err)
