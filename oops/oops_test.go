@@ -591,3 +591,57 @@ func TestStackedOopsErrors(t *testing.T) {
 	e := oops.Wrapf(err, "a").(reasonErr)
 	assert.Equal(t, "a: b: c: d", e.Reason())
 }
+
+func TestPrintMainStack(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "oops chain",
+			err:  oops.Errorf("test"),
+			want: `test
+
+github.com/samsarahq/go/oops_test.TestPrintMainStack
+	github.com/samsarahq/go/oops/oops_test.go:XXX
+testing.tRunner
+	testing/testing.go:XXX
+`,
+		},
+		{
+			name: "oops chain",
+			err:  chain(),
+			want: `base
+
+github.com/samsarahq/go/oops_test.chain: a
+	github.com/samsarahq/go/oops/oops_test.go:XXX
+github.com/samsarahq/go/oops_test.TestPrintMainStack
+	github.com/samsarahq/go/oops/oops_test.go:XXX
+testing.tRunner
+	testing/testing.go:XXX
+`,
+		},
+		{
+			name: "empty error",
+			err:  nil,
+			want: "",
+		},
+		{
+			name: "non-oops error",
+			err:  &baseErr{},
+			want: "",
+		},
+	}
+	// replace digits by XXX so test is not affected by line numbers
+	digitRegex := regexp.MustCompile("[0-9]+")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := oops.MainStackToString(tt.err)
+			got = digitRegex.ReplaceAllString(got, "XXX")
+			if got != tt.want {
+				t.Errorf("MainStackToString() = \n%v, want: \n%v", got, tt.want)
+			}
+		})
+	}
+}

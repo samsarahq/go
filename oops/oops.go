@@ -38,6 +38,43 @@ func (e *oopsError) Error() string {
 	return buffer.String()
 }
 
+// MainStackToString will write the frames of the main goroutine to a string.
+// This will return an empty string if the error is not an oopsError.
+func MainStackToString(err error) string {
+	var e *oopsError
+	if ok := As(err, &e); !ok {
+		return ""
+	}
+
+	var base error
+	for err := error(e); err != nil; err = Unwrap(err) {
+		base = err
+	}
+	var buffer bytes.Buffer
+	fmt.Fprintf(&buffer, "%s", base.Error())
+
+	frames := Frames(err)
+	if frames == nil || len(frames) == 0 {
+		return ""
+	}
+	fmt.Fprintf(&buffer, "\n\n")
+	writeSingleFrameTrace(&buffer, frames[0])
+	return buffer.String()
+}
+
+// writeSingleFrameTrace writes the stack trace of frames into the writer.
+func writeSingleFrameTrace(w io.Writer, frames []Frame) {
+	for _, frame := range frames {
+		// Print the current function.
+		if frame.Reason != "" {
+			fmt.Fprintf(w, "%s: %s\n", frame.Function, frame.Reason)
+		} else {
+			fmt.Fprintf(w, "%s\n", frame.Function)
+		}
+		fmt.Fprintf(w, "\t%s:%d\n", frame.File, frame.Line)
+	}
+}
+
 // Unwrap returns the next error in the error chain.
 // If there is no next error, Unwrap returns nil.
 func (err *oopsError) Unwrap() error {
@@ -171,21 +208,12 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 		if i > 0 {
 			fmt.Fprintf(w, "\n")
 		}
-
-		for _, frame := range stack {
-			// Print the current function.
-			if frame.Reason != "" {
-				fmt.Fprintf(w, "%s: %s\n", frame.Function, frame.Reason)
-			} else {
-				fmt.Fprintf(w, "%s\n", frame.Function)
-			}
-			fmt.Fprintf(w, "\t%s:%d\n", frame.File, frame.Line)
-		}
+		writeSingleFrameTrace(w, stack)
 	}
 }
 
 // Reason returns the reason chain of the error. Output can be an empty string.
-// NOTE: This does not include inner error in the reason message
+// NOTE: This does not include inner error in the reason message.
 func (e *oopsError) Reason() string {
 	output := []string{}
 	err := e
