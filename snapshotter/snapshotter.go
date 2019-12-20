@@ -83,9 +83,9 @@ func (s *Snapshotter) Verify() {
 	s.t.Helper()
 	nameSuffix := ""
 	if s.name != "" {
-		nameSuffix = "_" + strings.Replace(s.name, "/", "-", -1)
+		nameSuffix = "_" + strings.Replace(strings.Replace(s.name, "/", "-", -1), ":", "-", -1)
 	}
-	name := filepath.Join("testdata", strings.Replace(s.t.Name(), "/", "-", -1)+nameSuffix+".snapshots.json")
+	name := filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
 	if *rewrite {
 		if err := os.MkdirAll("testdata", 0755); err != nil {
 			s.t.Errorf("error creating testdata directory: %s", err)
@@ -158,20 +158,20 @@ func (s *Snapshotter) Verify() {
 }
 
 func coerceToString(i interface{}) string {
-       if str, ok := i.(string); ok {
-               return str
-       }
-       return pretty.Sprint(i)
+	if str, ok := i.(string); ok {
+		return str
+	}
+	return pretty.Sprint(i)
 }
 
 func diffString(a, b interface{}) string {
-       str, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
-               A:        difflib.SplitLines(coerceToString(a)),
-               B:        difflib.SplitLines(coerceToString(b)),
-               FromFile: "expected",
-               ToFile:   "received",
-               Context:  1,
-       })
+	str, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(coerceToString(a)),
+		B:        difflib.SplitLines(coerceToString(b)),
+		FromFile: "expected",
+		ToFile:   "received",
+		Context:  1,
+	})
 
-       return str
+	return str
 }
