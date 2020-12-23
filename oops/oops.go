@@ -197,6 +197,7 @@ func SkipFrames(err error, numFrames int) error {
 // annotated with explanatory messages.
 func (e *oopsError) writeStackTrace(w io.Writer) {
 	var base error
+	var fallbackBase error
 	for err := error(e); err != nil; err = Unwrap(err) {
 		if _, ok := err.(*oopsError); ok {
 			// We've found another oops error in the chain, our "base" is no longer valid.
@@ -211,6 +212,12 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 			// we want to mark the "base" as networkErr (not realErr)
 			base = err
 		}
+		fallbackBase = err
+	}
+	if base == nil {
+		// This code probably shouldn't be necessary as long as oops errors can't
+		// be at the end of the chain (I'm paranoid).
+		base = fallbackBase
 	}
 
 	fmt.Fprintf(w, "%s\n\n", base.Error())
