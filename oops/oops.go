@@ -198,7 +198,19 @@ func SkipFrames(err error, numFrames int) error {
 func (e *oopsError) writeStackTrace(w io.Writer) {
 	var base error
 	for err := error(e); err != nil; err = Unwrap(err) {
-		base = err
+		if _, ok := err.(*oopsError); ok {
+			// We've found another oops error in the chain, our "base" is no longer valid.
+			// This is possible if another error wraps the oops error:
+			// e.g. Oops1 -> nonOopsWrappedErr -> Oops2 -> realError
+			base = nil
+		} else if base == nil {
+			// We've found a non-oops error, and this is the first non-oops error we've
+			// found in the current chain.
+			//
+			// e.g. for the wrapped chain Oops1 -> Oops2 -> networkErr -> realError
+			// we want to mark the "base" as networkErr (not realErr)
+			base = err
+		}
 	}
 
 	fmt.Fprintf(w, "%s\n\n", base.Error())

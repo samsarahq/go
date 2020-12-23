@@ -95,6 +95,26 @@ func (e *baseErr) Error() string {
 	return "base"
 }
 
+func newNonOopsChainErr(prefix string, err error) *nonOopsChainErr {
+	return &nonOopsChainErr{
+		prefix: prefix,
+		inner: err,
+	}
+}
+
+type nonOopsChainErr struct{
+	prefix string
+	inner error
+}
+
+func (e *nonOopsChainErr) Error() string {
+	return fmt.Sprintf("%s: %s", e.prefix, e.inner.Error())
+}
+
+func (e *nonOopsChainErr) Unwrap() error {
+	return e.inner
+}
+
 func oopsChain() error {
 	base := &baseErr{}
 	a := oops.Wrapf(base, "a")
@@ -439,24 +459,38 @@ testing.tRunner
 	testing/testing.go:123
 `,
 		},
+		{
+			Title: "oops wrapping nonOops wrapper",
+			Error: oops.Wrapf(newNonOopsChainErr("somePrefix", errors.New("test error")), "oops err"),
+			Short: "somePrefix: test error",
+			Verbose: `somePrefix: test error
+
+github.com/samsarahq/go/oops_test.TestErrors: oops err
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+`,
+		},
 	}
 
 	re := regexp.MustCompile(`\.(go|s):\d+`)
 	for _, testcase := range testcases {
-		actualVerbose := re.ReplaceAllString(fmt.Sprint(testcase.Error), `.$1:123`)
-		if actualVerbose != testcase.Verbose {
-			t.Errorf("verbose %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Verbose, actualVerbose)
-		}
+		t.Run(testcase.Title, func(t *testing.T) {
+			actualVerbose := re.ReplaceAllString(fmt.Sprint(testcase.Error), `.$1:123`)
+			if actualVerbose != testcase.Verbose {
+				t.Errorf("verbose %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Verbose, actualVerbose)
+			}
 
-		actualShort := oops.Cause(testcase.Error).Error()
-		if actualShort != testcase.Short {
-			t.Errorf("short %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Short, actualShort)
-		}
+			actualShort := oops.Cause(testcase.Error).Error()
+			if actualShort != testcase.Short {
+				t.Errorf("short %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Short, actualShort)
+			}
 
-		actualCause := oops.Cause(testcase.Error)
-		if testcase.Cause != nil && testcase.Cause != actualCause {
-			t.Errorf("root cause %s:\nexpected:\n%v\nactual:\n%v", testcase.Title, testcase.Cause, actualCause)
-		}
+			actualCause := oops.Cause(testcase.Error)
+			if testcase.Cause != nil && testcase.Cause != actualCause {
+				t.Errorf("root cause %s:\nexpected:\n%v\nactual:\n%v", testcase.Title, testcase.Cause, actualCause)
+			}
+		})
 	}
 }
 
