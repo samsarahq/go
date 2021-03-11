@@ -3,6 +3,7 @@ package snapshotter
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/samsarahq/go/oops"
 )
 
 type T interface {
@@ -133,6 +135,19 @@ func (s *Snapshotter) Verify() {
 			return
 		}
 
+		testPackage := "."
+		frames := oops.Frames(oops.Errorf(""))
+		for i := len(frames[0]) - 1; i >= 0; i-- {
+			function := frames[0][i].Function
+			pkg := strings.TrimSuffix(function[0:strings.LastIndex(function, ".")], "_test")
+			if pkg == "testing" {
+				continue
+			}
+			testPackage = pkg
+			break
+		}
+		rewriteCommand := fmt.Sprintf(`go test %q -run %q -rewriteSnapshots`, testPackage, strings.Split(s.t.Name(), "/")[0])
+
 		for i := range actual {
 			expectedValue := expected[i].Values
 			actualValue := actual[i].Values
@@ -142,7 +157,7 @@ func (s *Snapshotter) Verify() {
 					if actualString, ok := actualValue[0].(string); ok {
 						if diff := diffString(expectedString, actualString); diff != "" {
 							s.t.Errorf("snapshot %s differs:\n%s", actual[i].Name, diff)
-							s.t.Errorf("If this is intentional, you can run `go test . -rewriteSnapshots` to generate new snapshots.")
+							s.t.Errorf("If this is intentional, you can run `%s` to generate new snapshots.", rewriteCommand)
 							return
 						}
 					}
@@ -151,7 +166,7 @@ func (s *Snapshotter) Verify() {
 
 			if diff := diffString(expected[i].Values, actual[i].Values); diff != "" {
 				s.t.Errorf("snapshot %s differs:\n%s", actual[i].Name, diff)
-				s.t.Errorf("If this is intentional, you can run `go test . -rewriteSnapshots` to generate new snapshots.")
+				s.t.Errorf("If this is intentional, you can run `%s` to generate new snapshots.", rewriteCommand)
 			}
 		}
 	}
