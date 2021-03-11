@@ -28,6 +28,8 @@
 // stacktrace. To keep your stacktraces as detailed as possible, it is best to
 // call oops.Wrapf every time you return an error. If you have no context to
 // add, you can always pass an empty format string to oops.Wrapf.
+// Wrapping an error multiple times in the same call stack will retain the most
+// detailed stacktrace, and annotate each function name with it's messages. 
 //
 // When adding oops to an existing package or program, you might have
 // intermediate functions that don't yet call oops.Wrapf when returning errors.
