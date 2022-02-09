@@ -87,6 +87,18 @@ func (s *Snapshotter) Verify() {
 	}
 	name := filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
 	if *rewrite {
+		// If there are no snapshots, then when rewriting, we want to remove the file if it exists.
+		if len(s.snapshots) == 0 {
+			if _, err := os.Stat(name); os.IsNotExist(err) {
+				return
+			}
+
+			// The file exists, so let's remove it.
+			if err := os.Remove(name); err != nil {
+				s.t.Errorf("failed to remove the existing snapshot file %s", name)
+			}
+			return
+		}
 		if err := os.MkdirAll("testdata", 0755); err != nil {
 			s.t.Errorf("error creating testdata directory: %s", err)
 			return
@@ -100,7 +112,6 @@ func (s *Snapshotter) Verify() {
 			s.t.Errorf("error writing snapshots: %s", err)
 			return
 		}
-
 	} else {
 		// When no snapshots file exists and no snapshots have been taken, do nothing.
 		if _, err := os.Stat(name); os.IsNotExist(err) && len(s.snapshots) == 0 {
