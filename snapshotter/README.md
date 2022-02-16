@@ -19,7 +19,8 @@ will fail, because the snapshot isn't there yet, with an error like
 --- FAIL: TestSnapshotter (0.00s)
     snapshotter.go:89: error reading snapshots: open testdata/TestSnapshotter.snapshots.json: no such file or directory
 ```
-To generate the snapshots, run `go test . -rewriteSnapshots`. This generates
+To generate the snapshots, run `go test . -rewriteSnapshots` 
+or run `REWRITE_SNAPSHOTS=1 go test .`. This generates
 a set of snapshots files in the testdata directory that should be added to git.
 Then, the tests will pass. If it at some point a regression causes the test
 output to break, the snapshotter will catch the changes and fail:

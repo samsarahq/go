@@ -18,7 +18,12 @@ type T interface {
 	Helper()
 }
 
-var rewrite = flag.Bool("rewriteSnapshots", false, "rewrite test data output")
+var rewriteFlag = flag.Bool("rewriteSnapshots", false, "rewrite test data output")
+
+func isRewrite() bool {
+	rewriteEnvVar := os.Getenv("REWRITE_SNAPSHOTS") == "1"
+	return rewriteEnvVar || *rewriteFlag
+}
 
 func jsonRoundTrip(value interface{}) (interface{}, error) {
 	bytes, err := json.Marshal(value)
@@ -86,7 +91,7 @@ func (s *Snapshotter) Verify() {
 		nameSuffix = "_" + strings.Replace(strings.Replace(s.name, "/", "-", -1), ":", "-", -1)
 	}
 	name := filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
-	if *rewrite {
+	if isRewrite() {
 		// If there are no snapshots, then when rewriting, we want to remove the file if it exists.
 		if len(s.snapshots) == 0 {
 			if _, err := os.Stat(name); os.IsNotExist(err) {
