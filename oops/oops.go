@@ -7,7 +7,41 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
+
+// filePrefixesToShortCircuit is a set of prefixes of files which, when encountered when serializing
+// an oops error, will skip appending the current frame and all subsequent frames in that stack.
+// It is useful for truncating long call stacks to make stack traces more concise.
+var filePrefixesToShortCircuit atomic.Value // map[string]struct{}{}
+
+func init() {
+	// Make sure we don't panic if we invoke this package and haven't called `SetPrefixesToShortCircuit`.
+	SetPrefixesToShortCircuit()
+}
+
+// SetPrefixesToShortCircuit sets `filePrefixesToShortCircuit` to `prefixes`. While it is thread-safe, it is the
+// caller's responsibility to ensure that there are not multiple callers in the same program calling
+// `SetPrefixesToShortCircuit` concurrently, as this may cause unexpected behavior where different prefixes are
+// filtered from stacktraces based on the set of values passed by the most recent caller of this function.
+func SetPrefixesToShortCircuit(prefixes ...string) {
+	prefixMap := make(map[string]struct{})
+	for _, prefix := range prefixes {
+		prefixMap[prefix] = struct{}{}
+	}
+	filePrefixesToShortCircuit.Store(prefixMap)
+}
+
+// GetPrefixesToShortCircuit returns the current set of file prefixes to short-circuit. The order of the returned string
+// slice is non-deterministic.
+func GetPrefixesToShortCircuit() []string {
+	prefixMap := filePrefixesToShortCircuit.Load().(map[string]struct{})
+	prefixes := make([]string, 0, len(prefixMap))
+	for prefix := range prefixMap {
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes
+}
 
 // stack is a comparable []uintptr slice.
 type stack struct {
@@ -52,17 +86,17 @@ func MainStackToString(err error) string {
 	var b strings.Builder
 	b.WriteString(base.Error())
 
-	frames := Frames(err)
+	frames, skipInfo := framesWithSkipInfo(err)
 	if frames == nil || len(frames) == 0 {
 		return ""
 	}
 	b.WriteString("\n\n")
-	writeSingleFrameTrace(&b, frames[0])
+	writeSingleFrameTrace(&b, frames[0], skipInfo[0])
 	return b.String()
 }
 
 // writeSingleFrameTrace writes the stack trace of frames into the string builder.
-func writeSingleFrameTrace(b *strings.Builder, frames []Frame) {
+func writeSingleFrameTrace(b *strings.Builder, frames []Frame, framesSkipped bool) {
 	for _, frame := range frames {
 		// Print the current function.
 		if frame.Reason != "" {
@@ -78,6 +112,10 @@ func writeSingleFrameTrace(b *strings.Builder, frames []Frame) {
 		b.WriteString(frame.File)
 		b.WriteRune(':')
 		b.WriteString(strconv.Itoa(frame.Line))
+		b.WriteRune('\n')
+	}
+	if framesSkipped {
+		b.WriteString("subsequent stack frames truncated")
 		b.WriteRune('\n')
 	}
 }
@@ -98,12 +136,12 @@ type stackWithReasons struct {
 	reasons []string
 }
 
-// Frames extracts all frames from an oops error. If err is not an oops error,
-// nil is returned.
-func Frames(err error) [][]Frame {
+// framesWithSkipInfo returns a slice of stack frames, along with whether or not there were frames that were skipped when
+// they were appended to each slice. The returned slices are guaranteed to have the same number of elements.
+func framesWithSkipInfo(err error) ([][]Frame, []bool) {
 	var e *oopsError
 	if ok := As(err, &e); !ok {
-		return nil
+		return nil, nil
 	}
 
 	// Walk the chain of oopsErrors backwards, collecting a set of stacks and
@@ -123,9 +161,13 @@ func Frames(err error) [][]Frame {
 	}
 
 	parsedStacks := make([][]Frame, 0, len(stacks))
+	skippedFramesInStack := make([]bool, 0, len(stacks))
 
-	// Walk the set of stacks backwards, starting with stack most closest to the
-	// cause error.
+	// Load the prefixes to short circuit so we don't do it within a loop.
+	filePrefixesToSkipMap := filePrefixesToShortCircuit.Load().(map[string]struct{})
+
+	// Walk the set of stacks backwards, starting with stack closest to the
+	// causal error.
 	for i := len(stacks) - 1; i >= 0; i-- {
 		frames := stacks[i].stack.frames
 		reasons := stacks[i].reasons
@@ -134,7 +176,9 @@ func Frames(err error) [][]Frame {
 
 		// Iterate over the stack frames.
 		iter := runtime.CallersFrames(frames)
-		// j tracks the index in the combined frames / reasons array of iter' stack
+		var framesSkipped bool
+
+		// j tracks the index in the combined frames / reasons array of iter's stack
 		// frame. Each frame in frames / reasons array appears at least once in the
 		// iterator's frames, but the iterator's frame might have more frames (for
 		// example, cgo frames, or inlined frames.)
@@ -156,6 +200,13 @@ func Frames(err error) [][]Frame {
 			}
 
 			file := frame.File
+			// Skip appending this and all other frames from this stack if file contains a prefix in the set of prefixes
+			// to short-circuit.
+			if mapContainsKeyWithPrefix(filePrefixesToSkipMap, file) {
+				framesSkipped = true
+				break
+			}
+
 			i := strings.LastIndex(file, "/src/")
 			if i >= 0 {
 				file = file[i+len("/src/"):]
@@ -168,10 +219,26 @@ func Frames(err error) [][]Frame {
 				Reason:   reason,
 			})
 		}
-
 		parsedStacks = append(parsedStacks, parsedFrames)
+		skippedFramesInStack = append(skippedFramesInStack, framesSkipped)
 	}
-	return parsedStacks
+	return parsedStacks, skippedFramesInStack
+}
+
+func mapContainsKeyWithPrefix(filePrefixesToSkipMap map[string]struct{}, file string) bool {
+	for prefixToSkip := range filePrefixesToSkipMap {
+		if strings.HasPrefix(file, prefixToSkip) {
+			return true
+		}
+	}
+	return false
+}
+
+// Frames extracts all frames from an oops error. If err is not an oops error,
+// nil is returned.
+func Frames(err error) [][]Frame {
+	frames, _ := framesWithSkipInfo(err)
+	return frames
 }
 
 // SkipFrames skips numFrames from the stack trace and returns a new copy of the error.
@@ -230,12 +297,13 @@ func (e *oopsError) writeStackTrace(b *strings.Builder) {
 	b.WriteString(base.Error())
 	b.WriteString("\n\n")
 
-	for i, stack := range Frames(e) {
+	frames, skipInfo := framesWithSkipInfo(e)
+	for i, stack := range frames {
 		// Include a newline between stacks.
 		if i > 0 {
 			b.WriteRune('\n')
 		}
-		writeSingleFrameTrace(b, stack)
+		writeSingleFrameTrace(b, stack, skipInfo[i])
 	}
 }
 
