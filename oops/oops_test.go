@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"runtime"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/samsarahq/go/oops"
@@ -98,13 +101,13 @@ func (e *baseErr) Error() string {
 func newNonOopsChainErr(prefix string, err error) *nonOopsChainErr {
 	return &nonOopsChainErr{
 		prefix: prefix,
-		inner: err,
+		inner:  err,
 	}
 }
 
-type nonOopsChainErr struct{
+type nonOopsChainErr struct {
 	prefix string
-	inner error
+	inner  error
 }
 
 func (e *nonOopsChainErr) Error() string {
@@ -686,35 +689,34 @@ func BenchmarkErrorf(b *testing.B) {
 	}
 }
 
-
 func BenchmarkWrapf(b *testing.B) {
-	benchmarkCases := []struct{
+	benchmarkCases := []struct {
 		name string
-		err error
+		err  error
 	}{
 		{
 			name: "nil error",
 		},
 		{
 			name: "non-oops error",
-			err: errors.New("not great, bob!"),
+			err:  errors.New("not great, bob!"),
 		},
 		{
 			name: "direct oops error",
-			err: oops.Errorf("scusi"),
+			err:  oops.Errorf("scusi"),
 		},
 		{
 			name: "nested oops error",
-			err: oops.Wrapf(oops.Errorf("scusi"), "mea culpa"),
+			err:  oops.Wrapf(oops.Errorf("scusi"), "mea culpa"),
 		},
 		{
 			name: "triply nested oops error",
-			err: oops.Wrapf(oops.Wrapf(oops.Errorf("scusi"), "mea culpa"), "did i do that"),
+			err:  oops.Wrapf(oops.Wrapf(oops.Errorf("scusi"), "mea culpa"), "did i do that"),
 		},
 	}
 
-
 	b.ResetTimer()
+
 	for _, bc := range benchmarkCases {
 		b.Run(bc.name, func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
@@ -738,4 +740,115 @@ func BenchmarkMainStackToString(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		oops.MainStackToString(err)
 	}
+}
+
+func TestPrefixesToShortCircuit(t *testing.T) {
+	assert.Empty(t, oops.GetPrefixesToShortCircuit())
+
+	oops.SetPrefixesToShortCircuit()
+	assert.Empty(t, oops.GetPrefixesToShortCircuit())
+
+	oops.SetPrefixesToShortCircuit("foo", "bar")
+	prefixes := oops.GetPrefixesToShortCircuit()
+	// Sort so test output is stable.
+	sort.Strings(prefixes)
+	assert.Equal(t, []string{"bar", "foo"}, prefixes)
+
+	oops.SetPrefixesToShortCircuit("baz")
+	assert.Equal(t, []string{"baz"}, oops.GetPrefixesToShortCircuit())
+}
+
+// getFileDirectory gets the directory of the file at the given call depth in the stack in relation to the function that
+// invokes `getFileDirectory`.
+func getFileDirectory(t *testing.T, callDepth int) string {
+	_, filename, _, _ := runtime.Caller(callDepth + 1)
+	lastIndex := strings.LastIndex(filename, "/")
+	assert.NotEqual(t, -1, lastIndex)
+	return filename[:lastIndex]
+}
+
+func TestErrorStringTruncation(t *testing.T) {
+	err := oops.Errorf("not great, bob")
+	// Gets the path of the test directory. Because this differs depending on the installation of go, we can't hardcode
+	// the prefixes to short circuit.
+	goTestDir := getFileDirectory(t, 1)
+	oopsTestDir := getFileDirectory(t, 0)
+
+	testCases := []struct {
+		name                   string
+		prefixesToShortCircuit []string
+		expectedOutput         string
+	}{
+		{
+			name:                   "no truncation",
+			prefixesToShortCircuit: []string{},
+			expectedOutput: `not great, bob
+
+github.com/samsarahq/go/oops_test.TestErrorStringTruncation
+	oops/oops_test.go:771
+testing.tRunner
+	testing/testing.go:1439
+
+`,
+		},
+		{
+			name:                   "go testing package truncated",
+			prefixesToShortCircuit: []string{goTestDir},
+			expectedOutput: `not great, bob
+
+github.com/samsarahq/go/oops_test.TestErrorStringTruncation
+	oops/oops_test.go:771
+subsequent stack frames truncated
+
+`,
+		},
+		{
+			name:                   "oops package truncated",
+			prefixesToShortCircuit: []string{oopsTestDir},
+			expectedOutput: `not great, bob
+
+subsequent stack frames truncated
+
+`,
+		},
+		{
+			name:                   "oops and go testing packages truncated",
+			prefixesToShortCircuit: []string{oopsTestDir, goTestDir},
+			expectedOutput: `not great, bob
+
+subsequent stack frames truncated
+
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			oops.SetPrefixesToShortCircuit(tc.prefixesToShortCircuit...)
+			errText := err.Error()
+			// Remove the content before 'oops/' and 'testing/' in lines that contain said strings so that the tests
+			// for oops are portable.
+			sanitizedErrText := stripPrecedingFromAllLines(errText, "oops/", "testing/")
+			assert.Equal(t, tc.expectedOutput, sanitizedErrText)
+		})
+	}
+}
+
+// stripPrecedingFromAllLines strips the content in each line in errorString up until toStrip. It adds a '\t' character
+// in each line that it strips.
+func stripPrecedingFromAllLines(errorString string, toStrip ...string) string {
+	splitByLines := strings.Split(errorString, "\n")
+	var builder strings.Builder
+	for _, line := range splitByLines {
+		currentLine := line
+		for _, strip := range toStrip {
+			lastIndex := strings.LastIndex(currentLine, strip)
+			if lastIndex != -1 {
+				currentLine = "\t" + currentLine[lastIndex:]
+			}
+		}
+		builder.WriteString(currentLine)
+		builder.WriteRune('\n')
+	}
+	return builder.String()
 }
