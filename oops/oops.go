@@ -3,10 +3,9 @@
 package oops
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -33,9 +32,9 @@ type oopsError struct {
 
 // Error implements error, and outputs a full backtrace.
 func (e *oopsError) Error() string {
-	var buffer bytes.Buffer
-	e.writeStackTrace(&buffer)
-	return buffer.String()
+	var b strings.Builder
+	e.writeStackTrace(&b)
+	return b.String()
 }
 
 // MainStackToString will write the frames of the main goroutine to a string.
@@ -50,28 +49,36 @@ func MainStackToString(err error) string {
 	for err := error(e); err != nil; err = Unwrap(err) {
 		base = err
 	}
-	var buffer bytes.Buffer
-	fmt.Fprintf(&buffer, "%s", base.Error())
+	var b strings.Builder
+	b.WriteString(base.Error())
 
 	frames := Frames(err)
 	if frames == nil || len(frames) == 0 {
 		return ""
 	}
-	fmt.Fprintf(&buffer, "\n\n")
-	writeSingleFrameTrace(&buffer, frames[0])
-	return buffer.String()
+	b.WriteString("\n\n")
+	writeSingleFrameTrace(&b, frames[0])
+	return b.String()
 }
 
-// writeSingleFrameTrace writes the stack trace of frames into the writer.
-func writeSingleFrameTrace(w io.Writer, frames []Frame) {
+// writeSingleFrameTrace writes the stack trace of frames into the string builder.
+func writeSingleFrameTrace(b *strings.Builder, frames []Frame) {
 	for _, frame := range frames {
 		// Print the current function.
 		if frame.Reason != "" {
-			fmt.Fprintf(w, "%s: %s\n", frame.Function, frame.Reason)
+			b.WriteString(frame.Function)
+			b.WriteString(": ")
+			b.WriteString(frame.Reason)
+			b.WriteRune('\n')
 		} else {
-			fmt.Fprintf(w, "%s\n", frame.Function)
+			b.WriteString(frame.Function)
+			b.WriteRune('\n')
 		}
-		fmt.Fprintf(w, "\t%s:%d\n", frame.File, frame.Line)
+		b.WriteRune('\t')
+		b.WriteString(frame.File)
+		b.WriteRune(':')
+		b.WriteString(strconv.Itoa(frame.Line))
+		b.WriteRune('\n')
 	}
 }
 
@@ -195,7 +202,7 @@ func SkipFrames(err error, numFrames int) error {
 
 // writeStackTrace unwinds a chain of oopsErrors and prints the stacktrace
 // annotated with explanatory messages.
-func (e *oopsError) writeStackTrace(w io.Writer) {
+func (e *oopsError) writeStackTrace(b *strings.Builder) {
 	var base error
 	var fallbackBase error
 	for err := error(e); err != nil; err = Unwrap(err) {
@@ -220,14 +227,15 @@ func (e *oopsError) writeStackTrace(w io.Writer) {
 		base = fallbackBase
 	}
 
-	fmt.Fprintf(w, "%s\n\n", base.Error())
+	b.WriteString(base.Error())
+	b.WriteString("\n\n")
 
 	for i, stack := range Frames(e) {
 		// Include a newline between stacks.
 		if i > 0 {
-			fmt.Fprintf(w, "\n")
+			b.WriteRune('\n')
 		}
-		writeSingleFrameTrace(w, stack)
+		writeSingleFrameTrace(b, stack)
 	}
 }
 
