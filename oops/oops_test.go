@@ -679,3 +679,63 @@ testing.tRunner
 		})
 	}
 }
+
+func BenchmarkErrorf(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		oops.Errorf("boom goes the dynamite")
+	}
+}
+
+
+func BenchmarkWrapf(b *testing.B) {
+	benchmarkCases := []struct{
+		name string
+		err error
+	}{
+		{
+			name: "nil error",
+		},
+		{
+			name: "non-oops error",
+			err: errors.New("not great, bob!"),
+		},
+		{
+			name: "direct oops error",
+			err: oops.Errorf("scusi"),
+		},
+		{
+			name: "nested oops error",
+			err: oops.Wrapf(oops.Errorf("scusi"), "mea culpa"),
+		},
+		{
+			name: "triply nested oops error",
+			err: oops.Wrapf(oops.Wrapf(oops.Errorf("scusi"), "mea culpa"), "did i do that"),
+		},
+	}
+
+
+	b.ResetTimer()
+	for _, bc := range benchmarkCases {
+		b.Run(bc.name, func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				oops.Wrapf(bc.err, "boom goes the dynamite")
+			}
+		})
+	}
+}
+
+func BenchmarkOopsErrorError(b *testing.B) {
+	err := oops.Errorf("boom goes the dynamite")
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		err.Error()
+	}
+}
+
+func BenchmarkMainStackToString(b *testing.B) {
+	err := oops.Errorf("boom goes the dynamite")
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		oops.MainStackToString(err)
+	}
+}
