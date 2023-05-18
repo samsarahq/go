@@ -18,11 +18,17 @@ type T interface {
 	Helper()
 }
 
-var rewriteFlag = flag.Bool("rewriteSnapshots", false, "rewrite test data output")
+var rewriteFlag = flag.Bool("rewriteSnapshots", false, "Rewrite test data output. Should not be used with -rewriteWithFailOnDiff")
+var rewriteWithFailOnDiff = flag.Bool("rewriteWithFailOnDiff", false, "Rewrites the snapshot while still failing the test on diff. Should not be used with -rewriteSnapshots")
 
 func isRewrite() bool {
 	rewriteEnvVar := os.Getenv("REWRITE_SNAPSHOTS") == "1"
 	return rewriteEnvVar || *rewriteFlag
+}
+
+func isRewriteWithFailOnDiff() bool {
+	rewriteEnvVar := os.Getenv("REWRITE_WITH_FAIL_ON_DIFF") == "1"
+	return rewriteEnvVar || *rewriteWithFailOnDiff
 }
 
 func jsonRoundTrip(value interface{}) (interface{}, error) {
@@ -114,6 +120,10 @@ func (s *Snapshotter) rewrite(name string) {
 // rewrites the test output.
 func (s *Snapshotter) Verify() {
 	s.t.Helper()
+	if isRewrite() && isRewriteWithFailOnDiff() {
+		s.t.Errorf("choose one of rewriteWithFailOnDiff and rewriteSnapshots, otherwise unexpected behavior can occur.")
+		return
+	}
 	nameSuffix := ""
 	if s.name != "" {
 		nameSuffix = "_" + strings.Replace(strings.Replace(s.name, "/", "-", -1), ":", "-", -1)
@@ -136,6 +146,10 @@ func (s *Snapshotter) Verify() {
 		if err := json.Unmarshal(bytes, &expected); err != nil {
 			s.t.Errorf("error unmarshaling snapshots: %s", err)
 			return
+		}
+
+		if isRewriteWithFailOnDiff() {
+			s.rewrite(name)
 		}
 
 		actual := s.snapshots
