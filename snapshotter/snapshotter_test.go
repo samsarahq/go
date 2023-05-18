@@ -2,6 +2,7 @@ package snapshotter_test
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -46,4 +47,29 @@ func TestSnapshotterFailed(t *testing.T) {
 func TestSnapshotterNoSnapshots(t *testing.T) {
 	ss := snapshotter.New(t)
 	ss.Verify()
+}
+
+func TestSnapshotterInvalidFlags(t *testing.T) {
+	if err := os.Setenv("REWRITE_SNAPSHOTS", "1"); err != nil {
+		t.Errorf("failed to set REWRITE_SNAPSHOTS")
+	}
+	if err := os.Setenv("REWRITE_WITH_FAIL_ON_DIFF", "1"); err != nil {
+		t.Errorf("failed to set REWRITE_WITH_FAIL_ON_DIFF")
+	}
+	defer func() {
+		if err := os.Setenv("REWRITE_SNAPSHOTS", "0"); err != nil {
+			t.Errorf("failed to reset REWRITE_SNAPSHOTS")
+		}
+		if err := os.Setenv("REWRITE_WITH_FAIL_ON_DIFF", "0"); err != nil {
+			t.Errorf("failed to reset REWRITE_WITH_FAIL_ON_DIFF")
+		}
+	}()
+
+	var m mockT
+	ss := snapshotter.New(&m)
+	ss.Verify()
+
+	if len(m.errors) == 0 || !strings.Contains(m.errors[0], "choose one of rewriteWithFailOnDiff and rewriteSnapshots") {
+		t.Errorf("expected error, got %v", m.errors)
+	}
 }
