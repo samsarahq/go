@@ -82,6 +82,34 @@ func (s *Snapshotter) Snapshot(name string, values ...interface{}) {
 	})
 }
 
+func (s *Snapshotter) rewrite(name string) {
+	// If there are no snapshots, then when rewriting, we want to remove the file if it exists.
+	if len(s.snapshots) == 0 {
+		if _, err := os.Stat(name); os.IsNotExist(err) {
+			return
+		}
+
+		// The file exists, so let's remove it.
+		if err := os.Remove(name); err != nil {
+			s.t.Errorf("failed to remove the existing snapshot file %s", name)
+		}
+		return
+	}
+	if err := os.MkdirAll("testdata", 0755); err != nil {
+		s.t.Errorf("error creating testdata directory: %s", err)
+		return
+	}
+	bytes, err := json.MarshalIndent(s.snapshots, "", "  ")
+	if err != nil {
+		s.t.Errorf("error marshaling snapshots: %s", err)
+		return
+	}
+	if err := ioutil.WriteFile(name, bytes, 0644); err != nil {
+		s.t.Errorf("error writing snapshots: %s", err)
+		return
+	}
+}
+
 // Verify finishes a snapshot test. It either compares the test output, or it
 // rewrites the test output.
 func (s *Snapshotter) Verify() {
@@ -92,31 +120,7 @@ func (s *Snapshotter) Verify() {
 	}
 	name := filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
 	if isRewrite() {
-		// If there are no snapshots, then when rewriting, we want to remove the file if it exists.
-		if len(s.snapshots) == 0 {
-			if _, err := os.Stat(name); os.IsNotExist(err) {
-				return
-			}
-
-			// The file exists, so let's remove it.
-			if err := os.Remove(name); err != nil {
-				s.t.Errorf("failed to remove the existing snapshot file %s", name)
-			}
-			return
-		}
-		if err := os.MkdirAll("testdata", 0755); err != nil {
-			s.t.Errorf("error creating testdata directory: %s", err)
-			return
-		}
-		bytes, err := json.MarshalIndent(s.snapshots, "", "  ")
-		if err != nil {
-			s.t.Errorf("error marshaling snapshots: %s", err)
-			return
-		}
-		if err := ioutil.WriteFile(name, bytes, 0644); err != nil {
-			s.t.Errorf("error writing snapshots: %s", err)
-			return
-		}
+		s.rewrite(name)
 	} else {
 		// When no snapshots file exists and no snapshots have been taken, do nothing.
 		if _, err := os.Stat(name); os.IsNotExist(err) && len(s.snapshots) == 0 {
