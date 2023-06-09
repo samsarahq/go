@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"regexp"
 	"runtime"
 	"sort"
@@ -68,6 +69,25 @@ func rc() error {
 
 func doubleWrapf() error {
 	return oops.Wrapf(oops.Wrapf(oops.Wrapf(rootCause, "yuck"), "bad"), "why would you do this")
+}
+
+func stripPathPrefix(s string) (string, error) {
+	// Strip path prefixes from filenames, aids comparisons in stack trace tests
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", errors.New("cannot determine caller filename")
+	}
+	pth := path.Dir(filename)
+	return strings.ReplaceAll(s, pth, "github.com/samsarahq/go/oops"), nil
+
+}
+
+func fixLineNumbers(s string) string {
+	// Standardize line numbers in captured stack traces. These can vary depending on the go version in use at runtime, also
+	// because the tests often reference LOC in this file, then additions / deletions to this file require tedious
+	// refactoring on expected results.
+	re := regexp.MustCompile(`(?m)\.(go|s):\d+$`)
+	return re.ReplaceAllString(s, `.$1:123`)
 }
 
 var rootCause = errors.New("some root cause")
@@ -326,8 +346,6 @@ testing.tRunner
 
 github.com/samsarahq/go/oops_test.runWithRecover.func1: recovered panic
 	github.com/samsarahq/go/oops/oops_test.go:123
-runtime.call32
-	runtime/asm_amd64.s:123
 runtime.gopanic
 	runtime/panic.go:123
 runtime.panicmem
@@ -356,8 +374,6 @@ testing.tRunner
 
 github.com/samsarahq/go/oops_test.runWithRecover.func1
 	github.com/samsarahq/go/oops/oops_test.go:123
-runtime.call32
-	runtime/asm_amd64.s:123
 runtime.gopanic
 	runtime/panic.go:123
 github.com/samsarahq/go/oops_test.TestErrors.func2
@@ -380,8 +396,6 @@ testing.tRunner
 
 github.com/samsarahq/go/oops_test.runWithRecover.func1: recovered panic
 	github.com/samsarahq/go/oops/oops_test.go:123
-runtime.call32
-	runtime/asm_amd64.s:123
 runtime.gopanic
 	runtime/panic.go:123
 github.com/samsarahq/go/oops_test.TestErrors.func3
@@ -413,8 +427,6 @@ testing.tRunner
 
 github.com/samsarahq/go/oops_test.runWithRecover.func1: recovered panic
 	github.com/samsarahq/go/oops/oops_test.go:123
-runtime.call32
-	runtime/asm_amd64.s:123
 runtime.gopanic
 	runtime/panic.go:123
 github.com/samsarahq/go/oops_test.TestErrors.func4
@@ -476,10 +488,11 @@ testing.tRunner
 		},
 	}
 
-	re := regexp.MustCompile(`\.(go|s):\d+`)
 	for _, testcase := range testcases {
 		t.Run(testcase.Title, func(t *testing.T) {
-			actualVerbose := re.ReplaceAllString(fmt.Sprint(testcase.Error), `.$1:123`)
+			actualVerbose := fixLineNumbers(fmt.Sprint(testcase.Error))
+			actualVerbose, err := stripPathPrefix(actualVerbose)
+			assert.NoError(t, err)
 			if actualVerbose != testcase.Verbose {
 				t.Errorf("verbose %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Verbose, actualVerbose)
 			}
@@ -506,18 +519,64 @@ func TestFrames(t *testing.T) {
 		{
 			description: "non-oops chain",
 			err:         chain(),
-			expected:    [][]oops.Frame{[]oops.Frame{oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 109, Reason: "a"}, oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 471, Reason: ""}, oops.Frame{File: "testing/testing.go", Function: "testing.tRunner", Line: 827, Reason: ""}}, []oops.Frame{oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 110, Reason: "b"}, oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 471, Reason: ""}, oops.Frame{File: "testing/testing.go", Function: "testing.tRunner", Line: 827, Reason: ""}}},
+			expected: [][]oops.Frame{
+				{
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 999, Reason: "a"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
+				},
+				{
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 999, Reason: "b"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
+				},
+			},
 		},
 		{
 			description: "oops chain",
 			err:         oopsChain(),
-			expected:    [][]oops.Frame{[]oops.Frame{oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 100, Reason: "a"}, oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 476, Reason: ""}, oops.Frame{File: "testing/testing.go", Function: "testing.tRunner", Line: 827, Reason: ""}}, []oops.Frame{oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 101, Reason: "b"}, oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 476, Reason: ""}, oops.Frame{File: "testing/testing.go", Function: "testing.tRunner", Line: 827, Reason: ""}}, []oops.Frame{oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 103, Reason: "c"}, oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 476, Reason: ""}, oops.Frame{File: "testing/testing.go", Function: "testing.tRunner", Line: 827, Reason: ""}}, []oops.Frame{oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 104, Reason: "d"}, oops.Frame{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 476, Reason: ""}, oops.Frame{File: "testing/testing.go", Function: "testing.tRunner", Line: 827, Reason: ""}}},
+			expected: [][]oops.Frame{
+				{
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "a"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
+				},
+				{
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "b"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
+				},
+				{
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "c"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""}},
+				{
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "d"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
+				},
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			assert.Equal(t, tc.expected, oops.Frames(tc.err))
+
+			// we need to modify the returned errors to replace the actual paths to match the hard-coded test values
+			frames := oops.Frames(tc.err)
+			sanitizedFrames := make([][]oops.Frame, len(frames))
+			for i, innerFrames := range frames {
+				newInnerFrames := make([]oops.Frame, len(innerFrames))
+				for j, actualFrame := range innerFrames {
+					// assert that we capture line numbers, unreliable to assert they exactly equal a value though
+					assert.Greater(t, actualFrame.Line, 0)
+					frameFilename, err := stripPathPrefix(actualFrame.File)
+					assert.NoError(t, err)
+					newInnerFrames[j] = oops.Frame{File: frameFilename, Line: 999, Function: actualFrame.Function, Reason: actualFrame.Reason}
+				}
+				sanitizedFrames[i] = newInnerFrames
+			}
+			assert.Equal(t, tc.expected, sanitizedFrames)
 		})
 	}
 }
@@ -672,13 +731,17 @@ testing.tRunner
 	}
 	// replace digits by XXX so test is not affected by line numbers
 	digitRegex := regexp.MustCompile("[0-9]+")
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := oops.MainStackToString(tt.err)
 			got = digitRegex.ReplaceAllString(got, "XXX")
+			got, err := stripPathPrefix(got)
+			assert.NoError(t, err)
 			if got != tt.want {
 				t.Errorf("MainStackToString() = \n%v, want: \n%v", got, tt.want)
 			}
+
 		})
 	}
 }
@@ -785,9 +848,9 @@ func TestErrorStringTruncation(t *testing.T) {
 			expectedOutput: `not great, bob
 
 github.com/samsarahq/go/oops_test.TestErrorStringTruncation
-	oops/oops_test.go:771
+	oops/oops_test.go:123
 testing.tRunner
-	testing/testing.go:1439
+	testing/testing.go:123
 
 `,
 		},
@@ -797,7 +860,7 @@ testing.tRunner
 			expectedOutput: `not great, bob
 
 github.com/samsarahq/go/oops_test.TestErrorStringTruncation
-	oops/oops_test.go:771
+	oops/oops_test.go:123
 subsequent stack frames truncated
 
 `,
@@ -829,6 +892,7 @@ subsequent stack frames truncated
 			// Remove the content before 'oops/' and 'testing/' in lines that contain said strings so that the tests
 			// for oops are portable.
 			sanitizedErrText := stripPrecedingFromAllLines(errText, "oops/", "testing/")
+			sanitizedErrText = fixLineNumbers(sanitizedErrText)
 			assert.Equal(t, tc.expectedOutput, sanitizedErrText)
 		})
 	}
