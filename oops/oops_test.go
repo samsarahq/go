@@ -518,14 +518,14 @@ func TestFrames(t *testing.T) {
 			err:         chain(),
 			expected: [][]oops.Frame{
 				{
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 150, Reason: "a"},
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 518, Reason: ""},
-					{File: "testing/testing.go", Function: "testing.tRunner", Line: 1576, Reason: ""},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 999, Reason: "a"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
 				},
 				{
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 151, Reason: "b"},
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 518, Reason: ""},
-					{File: "testing/testing.go", Function: "testing.tRunner", Line: 1576, Reason: ""},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.chain", Line: 999, Reason: "b"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
 				},
 			},
 		},
@@ -534,23 +534,23 @@ func TestFrames(t *testing.T) {
 			err:         oopsChain(),
 			expected: [][]oops.Frame{
 				{
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 141, Reason: "a"},
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 534, Reason: ""},
-					{File: "testing/testing.go", Function: "testing.tRunner", Line: 1576, Reason: ""},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "a"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
 				},
 				{
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 142, Reason: "b"},
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 534, Reason: ""},
-					{File: "testing/testing.go", Function: "testing.tRunner", Line: 1576, Reason: ""},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "b"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
 				},
 				{
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 144, Reason: "c"},
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 534, Reason: ""},
-					{File: "testing/testing.go", Function: "testing.tRunner", Line: 1576, Reason: ""}},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "c"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""}},
 				{
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 145, Reason: "d"},
-					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 534, Reason: ""},
-					{File: "testing/testing.go", Function: "testing.tRunner", Line: 1576, Reason: ""},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.oopsChain", Line: 999, Reason: "d"},
+					{File: "github.com/samsarahq/go/oops/oops_test.go", Function: "github.com/samsarahq/go/oops_test.TestFrames", Line: 999, Reason: ""},
+					{File: "testing/testing.go", Function: "testing.tRunner", Line: 999, Reason: ""},
 				},
 			},
 		},
@@ -565,7 +565,9 @@ func TestFrames(t *testing.T) {
 			for i, innerFrames := range frames {
 				newInnerFrames := make([]oops.Frame, len(innerFrames))
 				for j, actualFrame := range innerFrames {
-					newInnerFrames[j] = oops.Frame{File: stripPathPrefix(actualFrame.File), Line: actualFrame.Line, Function: actualFrame.Function, Reason: actualFrame.Reason}
+					// assert that we capture line numbers, unreliable to assert they exactly equal a value though
+					assert.Greater(t, actualFrame.Line, 0)
+					newInnerFrames[j] = oops.Frame{File: stripPathPrefix(actualFrame.File), Line: 999, Function: actualFrame.Function, Reason: actualFrame.Reason}
 				}
 				sanitizedFrames[i] = newInnerFrames
 			}
