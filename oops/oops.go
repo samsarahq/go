@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package oops
@@ -53,26 +54,26 @@ type stack struct {
 type oopsError struct {
 	// inner is the next non-oops error in the chain.
 	inner error
-	// The previous oopsError, if any. This value is only used to follow stacktraces.
+	// previous is the previous oopsError, if any. This value is only used to follow stacktraces.
 	previous *oopsError
-	// The current stacktrace. Might be the same as previous' stacktrace if that
+	// stack is the current stacktrace. Might be the same as previous' stacktrace if that
 	// is another oopsError.
 	stack *stack
-	// A small explanatory message what went wrong at this level in the stack.
+	// reason is a short explanatory message indicating what went wrong at this level in the stack.
 	reason string
-	// The index of the stack frame where this oopsError was added.
+	// index is the index of the stack frame where this oopsError was added.
 	index int
 }
 
-// Error implements error, and outputs a full backtrace.
+// Error implements error and outputs a full backtrace.
 func (e *oopsError) Error() string {
 	var b strings.Builder
 	e.writeStackTrace(&b)
 	return b.String()
 }
 
-// MainStackToString will write the frames of the main goroutine to a string.
-// This will return an empty string if the error is not an oopsError.
+// MainStackToString writes the frames of the main goroutine to a string.
+// It returns an empty string if the error is not an oopsError.
 func MainStackToString(err error) string {
 	var e *oopsError
 	if ok := As(err, &e); !ok {
@@ -372,7 +373,7 @@ func wrapf(err error, reason string) error {
 		//
 		// When parent calls Wrapf and captures the stack frame, the program
 		// counter in child will point the if statement that checks the parent's
-		// return value. When the child then calls Wrapf, it's program counter
+		// return value. When the child then calls Wrapf, its program counter
 		// will have advanced to the Wrapf call, and will no longer match the
 		// program originally captured by the parent. However, the program counter
 		// in compare will still match, and so we compare against that.
