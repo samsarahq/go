@@ -1,3 +1,4 @@
+//go:build !js
 // +build !js
 
 package oops
@@ -468,4 +469,49 @@ func Recover(p interface{}) error {
 		return wrapf(err, "recovered panic")
 	}
 	return wrapf(fmt.Errorf("recovered panic: %v", p), "")
+}
+
+type MultiError struct {
+	errors []error
+}
+
+func (omr *MultiError) Error() string {
+	return ""
+}
+
+func Errors(err error) []error {
+	if omr, ok := err.(*MultiError); ok {
+		return omr.errors
+	}
+	return []error{err}
+}
+
+func (omr *MultiError) Errors() []error {
+	return omr.errors
+}
+
+func Append(left error, right error) error {
+	if left == nil && right == nil {
+		return nil
+	}
+
+	if right != nil {
+
+	}
+
+	vls := []error{left, right}
+	res := []error{}
+
+	for i := range vls {
+		if vls[i] != nil {
+
+			if merr, ok := right.(*MultiError); ok {
+				vls = append(vls, merr.errors...)
+			}
+
+			res = append(res, wrapf(vls[i], vls[i].Error()))
+		}
+	}
+
+	return &MultiError{errors: res}
 }

@@ -909,3 +909,75 @@ func stripPrecedingFromAllLines(errorString string, toStrip ...string) string {
 	}
 	return builder.String()
 }
+
+func TestAppendWrapsErrors(t *testing.T) {
+	err := oops.Errorf("a")
+	err = oops.Append(err, errors.New("b"))
+	merr, _ := err.(*oops.MultiError)
+	for _, e := range merr.Errors() {
+		assert.IsType(t, oops.Errorf("thing"), e)
+	}
+}
+
+// We can append base errors to an oops multi-error, which are all wrapped correctly as oops errors
+func TestAppendBaseErrors(t *testing.T) {
+
+	testCases := []struct {
+		desc     string
+		left     error
+		right    error
+		expected []error
+	}{
+		{
+			desc:     "nil returns nil",
+			left:     nil,
+			right:    nil,
+			expected: nil,
+		},
+		{
+			desc:     "right is nil",
+			left:     errors.New("a"),
+			right:    nil,
+			expected: []error{oops.Errorf("a")},
+		},
+		{
+			desc:     "left is nil",
+			left:     nil,
+			right:    errors.New("b"),
+			expected: []error{oops.Errorf("b")},
+		},
+		{
+			desc:  "nested multierrors",
+			left:  errors.New("a"),
+			right: oops.Append(errors.New("b"), errors.New("c")),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := oops.Append(tc.left, tc.right)
+			if tc.left == nil && tc.right == nil {
+				assert.Empty(t, result)
+				return
+			}
+
+			merr, ok := result.(*oops.MultiError)
+			if !ok {
+				t.Errorf("Result was not oopsMultiError")
+			}
+
+			capturedErrors := merr.Errors()
+			for i, e := range capturedErrors {
+				_, ok := e.(reasonErr)
+				if !ok {
+					t.Errorf("Returned error does not implement Reason")
+				}
+				assert.Equal(t, oops.Cause(tc.expected[i]), oops.Cause(e))
+			}
+		})
+	}
+}
