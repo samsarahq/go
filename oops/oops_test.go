@@ -988,7 +988,7 @@ func TestAppendBaseErrors(t *testing.T) {
 
 			merr, ok := result.(*oops.MultiError)
 			if !ok {
-				t.Errorf("Result was not oopsMultiError")
+				t.Errorf("Result was not oops.MultiError")
 			}
 
 			capturedErrors := merr.Errors()
