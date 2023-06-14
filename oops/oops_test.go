@@ -947,13 +947,34 @@ func TestAppendBaseErrors(t *testing.T) {
 			expected: []error{oops.Errorf("b")},
 		},
 		{
-			desc:  "nested multierrors",
+			desc:  "nested multierrors right",
 			left:  errors.New("a"),
 			right: oops.Append(errors.New("b"), errors.New("c")),
 			expected: []error{
 				oops.Errorf("a"),
 				oops.Errorf("b"),
 				oops.Errorf("c"),
+			},
+		},
+		{
+			desc:  "nested multierrors left",
+			left:  oops.Append(errors.New("a"), errors.New("b")),
+			right: errors.New("c"),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+			},
+		},
+		{
+			desc:  "append multierror to multierror",
+			left:  oops.Append(errors.New("a"), errors.New("b")),
+			right: oops.Append(errors.New("c"), errors.New("d")),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+				oops.Errorf("d"),
 			},
 		},
 	}
@@ -978,6 +999,43 @@ func TestAppendBaseErrors(t *testing.T) {
 				}
 				assert.Equal(t, oops.Cause(tc.expected[i]), oops.Cause(e))
 			}
+		})
+	}
+}
+
+// MultiError correctly implements Error(), and returns a concatenated list of all captured
+// errors, including stacktraces for each
+func TestMultiErrorError(t *testing.T) {
+	testCases := []struct {
+		err      error
+		expected string
+	}{
+		{
+			err: oops.Append(oops.Errorf("a"), oops.Errorf("b")),
+			expected: `the following errors occurred:
+
+a
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError: a
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+---
+
+b
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError: a
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+			`,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run("Error string", func(t *testing.T) {
+			assert.Equal(t, tC.expected, tC.err.Error())
 		})
 	}
 }

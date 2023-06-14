@@ -495,23 +495,18 @@ func Append(left error, right error) error {
 		return nil
 	}
 
-	if right != nil {
+	var errs []error
 
-	}
-
-	vls := []error{left, right}
-	res := []error{}
-
-	for i := range vls {
-		if vls[i] != nil {
-
-			if merr, ok := right.(*MultiError); ok {
-				vls = append(vls, merr.errors...)
+	// potentially unpack arguments if either is a MultiError itself
+	for _, arg := range []error{left, right} {
+		if mErr, ok := arg.(*MultiError); ok {
+			errs = append(errs, mErr.errors...)
+		} else {
+			if arg != nil {
+				errs = append(errs, wrapf(arg, arg.Error()))
 			}
-
-			res = append(res, wrapf(vls[i], vls[i].Error()))
 		}
 	}
 
-	return &MultiError{errors: res}
+	return &MultiError{errors: errs}
 }
