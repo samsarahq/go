@@ -71,20 +71,22 @@ func doubleWrapf() error {
 	return oops.Wrapf(oops.Wrapf(oops.Wrapf(rootCause, "yuck"), "bad"), "why would you do this")
 }
 
-func stripPathPrefix(s string) string {
+func stripPathPrefix(s string) (string, error) {
 	// Strip path prefixes from filenames, aids comparisons in stack trace tests
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
-		panic("Cant work out where we are")
+		return "", errors.New("cannot determine caller filename")
 	}
 	pth := path.Dir(filename)
-	return strings.ReplaceAll(s, pth, "github.com/samsarahq/go/oops")
+	return strings.ReplaceAll(s, pth, "github.com/samsarahq/go/oops"), nil
 
 }
 
 func fixLineNumbers(s string) string {
-	// Sanitize line numbers in stack traces to avoid cat and mouse
-	re := regexp.MustCompile(`(?m)\.(go|s):\d+`)
+	// Standardize line numbers in captured stack traces. These can vary depending on the go version in use at runtime, also
+	// because the tests often reference LOC in this file, then additions / deletions to this file require tedious
+	// refactoring on expected results.
+	re := regexp.MustCompile(`(?m)\.(go|s):\d+$`)
 	return re.ReplaceAllString(s, `.$1:123`)
 }
 
@@ -489,7 +491,8 @@ testing.tRunner
 	for _, testcase := range testcases {
 		t.Run(testcase.Title, func(t *testing.T) {
 			actualVerbose := fixLineNumbers(fmt.Sprint(testcase.Error))
-			actualVerbose = stripPathPrefix(actualVerbose)
+			actualVerbose, err := stripPathPrefix(actualVerbose)
+			assert.NoError(t, err)
 			if actualVerbose != testcase.Verbose {
 				t.Errorf("verbose %s:\nexpected:\n%s\nactual:\n%s", testcase.Title, testcase.Verbose, actualVerbose)
 			}
@@ -567,7 +570,9 @@ func TestFrames(t *testing.T) {
 				for j, actualFrame := range innerFrames {
 					// assert that we capture line numbers, unreliable to assert they exactly equal a value though
 					assert.Greater(t, actualFrame.Line, 0)
-					newInnerFrames[j] = oops.Frame{File: stripPathPrefix(actualFrame.File), Line: 999, Function: actualFrame.Function, Reason: actualFrame.Reason}
+					frameFilename, err := stripPathPrefix(actualFrame.File)
+					assert.NoError(t, err)
+					newInnerFrames[j] = oops.Frame{File: frameFilename, Line: 999, Function: actualFrame.Function, Reason: actualFrame.Reason}
 				}
 				sanitizedFrames[i] = newInnerFrames
 			}
@@ -734,10 +739,12 @@ testing.tRunner
 		t.Run(tt.name, func(t *testing.T) {
 			got := oops.MainStackToString(tt.err)
 			got = digitRegex.ReplaceAllString(got, "XXX")
-			got = stripPathPrefix(got)
+			got, err := stripPathPrefix(got)
+			assert.NoError(t, err)
 			if got != tt.want {
 				t.Errorf("MainStackToString() = \n%v, want: \n%v", got, tt.want)
 			}
+
 		})
 	}
 }
@@ -1079,9 +1086,8 @@ testing.tRunner
 	}
 	for _, tC := range testCases {
 		t.Run("Error string", func(t *testing.T) {
-			traceback := tC.err.Error()
-			traceback = stripPathPrefix(fixLineNumbers(traceback))
-			traceback = fixLineNumbers(traceback)
+			traceback, err := stripPathPrefix(fixLineNumbers(tC.err.Error()))
+			assert.NoError(t, err)
 			assert.Equal(t, tC.expected, traceback)
 		})
 	}
