@@ -631,6 +631,9 @@ func TestAs(t *testing.T) {
 	checkWrapper = nil
 	assert.True(t, oops.As(d, &checkWrapper))
 	assert.Equal(t, middle, checkWrapper)
+
+	assert.Panics(t, func() { oops.As(checkBase, nil) })
+	assert.Panics(t, func() { oops.As(base, interface{}(nil)) })
 }
 
 func TestOopsSkipFrame(t *testing.T) {
@@ -910,17 +913,21 @@ func stripPrecedingFromAllLines(errorString string, toStrip ...string) string {
 	return builder.String()
 }
 
+type hasErrors interface {
+	Errors() []error
+}
+
 func TestAppendWrapsErrors(t *testing.T) {
 	err := oops.Errorf("a")
 	err = oops.Append(err, errors.New("b"))
-	merr, _ := err.(*oops.MultiError)
+	merr, _ := err.(hasErrors)
 	for _, e := range merr.Errors() {
 		assert.IsType(t, oops.Errorf("thing"), e)
 	}
 }
 
 // We can append base errors to an oops multi-error, which are all wrapped correctly as oops errors
-func TestAppendBaseErrors(t *testing.T) {
+func TestAppend(t *testing.T) {
 
 	testCases := []struct {
 		desc     string
@@ -977,6 +984,17 @@ func TestAppendBaseErrors(t *testing.T) {
 				oops.Errorf("d"),
 			},
 		},
+		{
+			desc:  "doubly nested multierror",
+			left:  oops.Append(errors.New("a"), oops.Append(errors.New("b"), errors.New("c"))),
+			right: errors.New("d"),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+				oops.Errorf("d"),
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -986,7 +1004,7 @@ func TestAppendBaseErrors(t *testing.T) {
 				return
 			}
 
-			merr, ok := result.(*oops.MultiError)
+			merr, ok := result.(hasErrors)
 			if !ok {
 				t.Errorf("Result was not oops.MultiError")
 			}
@@ -1011,31 +1029,60 @@ func TestMultiErrorError(t *testing.T) {
 		expected string
 	}{
 		{
-			err: oops.Append(oops.Errorf("a"), oops.Errorf("b")),
+			err: oops.Append(oops.Errorf("A terrible thing has occurred"), oops.Errorf("No, really")),
 			expected: `the following errors occurred:
 
-a
+A terrible thing has occurred
 
-github.com/samsarahq/go/oops_test.TestMultiErrorError: a
+github.com/samsarahq/go/oops_test.TestMultiErrorError
 	github.com/samsarahq/go/oops/oops_test.go:123
 testing.tRunner
 	testing/testing.go:123
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError: A terrible thing has occurred
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
 
 ---
 
-b
+No, really
 
-github.com/samsarahq/go/oops_test.TestMultiErrorError: a
+github.com/samsarahq/go/oops_test.TestMultiErrorError
 	github.com/samsarahq/go/oops/oops_test.go:123
 testing.tRunner
 	testing/testing.go:123
 
-			`,
+github.com/samsarahq/go/oops_test.TestMultiErrorError: No, really
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+
+---
+
+`,
 		},
 	}
 	for _, tC := range testCases {
 		t.Run("Error string", func(t *testing.T) {
-			assert.Equal(t, tC.expected, tC.err.Error())
+			traceback := tC.err.Error()
+			traceback = stripPathPrefix(fixLineNumbers(traceback))
+			traceback = fixLineNumbers(traceback)
+			assert.Equal(t, tC.expected, traceback)
 		})
 	}
 }

@@ -471,25 +471,43 @@ func Recover(p interface{}) error {
 	return wrapf(fmt.Errorf("recovered panic: %v", p), "")
 }
 
-type MultiError struct {
+// MultiError acts as a container to capture multiple errors and their tracebacks
+// When this object is written to a log it will log all the errors it has been fed.
+type multiError struct {
 	errors []error
 }
 
-func (omr *MultiError) Error() string {
-	return ""
+func (omr *multiError) Error() string {
+	var b strings.Builder
+	b.WriteString("the following errors occurred:\n\n")
+	for _, e := range omr.errors {
+		if oerr, ok := e.(*oopsError); ok {
+			oerr.writeStackTrace(&b)
+		} else {
+			b.WriteString(e.Error())
+		}
+		b.WriteString("\n\n---\n\n")
+	}
+
+	return b.String()
 }
 
+// Return the slice of errors contained within a MultiError instance, or a slice containing
+// the passed error if the argument is a single error
 func Errors(err error) []error {
-	if omr, ok := err.(*MultiError); ok {
+	if omr, ok := err.(*multiError); ok {
 		return omr.errors
 	}
 	return []error{err}
 }
 
-func (omr *MultiError) Errors() []error {
+func (omr *multiError) Errors() []error {
 	return omr.errors
 }
 
+// Concatentate an error with another, yielding a MultiError instance
+// containing both errors. If either argument is itself a multierror, then
+// it will be flattened before the contents of the second argument is appended
 func Append(left error, right error) error {
 	if left == nil && right == nil {
 		return nil
@@ -499,7 +517,7 @@ func Append(left error, right error) error {
 
 	// potentially unpack arguments if either is a MultiError itself
 	for _, arg := range []error{left, right} {
-		if mErr, ok := arg.(*MultiError); ok {
+		if mErr, ok := arg.(*multiError); ok {
 			errs = append(errs, mErr.errors...)
 		} else {
 			if arg != nil {
@@ -508,5 +526,5 @@ func Append(left error, right error) error {
 		}
 	}
 
-	return &MultiError{errors: errs}
+	return &multiError{errors: errs}
 }
