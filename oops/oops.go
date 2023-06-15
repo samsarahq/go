@@ -505,7 +505,7 @@ func (omr *multiError) Errors() []error {
 	return omr.errors
 }
 
-// Concatentate an error with another, yielding a MultiError instance
+// Append concatenates an error onto another, yielding a multiError instance
 // containing both errors. If either argument is itself a multierror, then
 // it will be flattened before the contents of the second argument is appended
 func Append(left error, right error) error {
