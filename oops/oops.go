@@ -492,7 +492,7 @@ func (omr *multiError) Error() string {
 	return b.String()
 }
 
-// Return the slice of errors contained within a MultiError instance, or a slice containing
+// Errors returns the slice of errors contained within a multiError instance, or a slice containing
 // the passed error if the argument is a single error
 func Errors(err error) []error {
 	if omr, ok := err.(*multiError); ok {
