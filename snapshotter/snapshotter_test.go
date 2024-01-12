@@ -73,3 +73,18 @@ func TestSnapshotterInvalidFlags(t *testing.T) {
 		t.Errorf("expected error, got %v", m.errors)
 	}
 }
+
+func TestSnapshotFileName(t *testing.T) {
+	ss := snapshotter.New(t)
+	expected := fmt.Sprintf("testdata/%s.snapshots.json", t.Name())
+	if expected != ss.SnapshotFileName() {
+		t.Errorf("expected %s, got %s", expected, ss.SnapshotFileName())
+	}
+
+	ss2 := snapshotter.NewNamed(t, "foobar")
+	expected = fmt.Sprintf("testdata/%s_foobar.snapshots.json", t.Name())
+	if expected != ss2.SnapshotFileName() {
+		t.Errorf("expected %s, got %s", expected, ss2.SnapshotFileName())
+	}
+
+}
