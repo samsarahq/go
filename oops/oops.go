@@ -25,6 +25,9 @@ func init() {
 // caller's responsibility to ensure that there are not multiple callers in the same program calling
 // `SetPrefixesToShortCircuit` concurrently, as this may cause unexpected behavior where different prefixes are
 // filtered from stacktraces based on the set of values passed by the most recent caller of this function.
+// Note that the file prefix which is evaluated against the set of prefixes provided to this function when an oops
+// error is serialized, is one that has `<text>/src/` stripped from itself before being evaluated. So, make sure
+// that the prefixes you provide here take that into account.
 func SetPrefixesToShortCircuit(prefixes ...string) {
 	prefixMap := make(map[string]struct{})
 	for _, prefix := range prefixes {
@@ -201,16 +204,17 @@ func framesWithSkipInfo(err error) ([][]Frame, []bool) {
 			}
 
 			file := frame.File
+
+			i := strings.LastIndex(file, "/src/")
+			if i >= 0 {
+				file = file[i+len("/src/"):]
+			}
+
 			// Skip appending this and all other frames from this stack if file contains a prefix in the set of prefixes
 			// to short-circuit.
 			if mapContainsKeyWithPrefix(filePrefixesToSkipMap, file) {
 				framesSkipped = true
 				break
-			}
-
-			i := strings.LastIndex(file, "/src/")
-			if i >= 0 {
-				file = file[i+len("/src/"):]
 			}
 
 			parsedFrames = append(parsedFrames, Frame{
