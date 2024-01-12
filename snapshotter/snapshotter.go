@@ -116,6 +116,17 @@ func (s *Snapshotter) rewrite(name string) {
 	}
 }
 
+// Returns the name of the snapshot file that will/would be created when running Verify.
+// Includes the testdata/ path
+func (s *Snapshotter) SnapshotFileName() string {
+	s.t.Helper()
+	nameSuffix := ""
+	if s.name != "" {
+		nameSuffix = "_" + strings.Replace(strings.Replace(s.name, "/", "-", -1), ":", "-", -1)
+	}
+	return filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
+}
+
 // Verify finishes a snapshot test. It either compares the test output, or it
 // rewrites the test output.
 func (s *Snapshotter) Verify() {
@@ -124,11 +135,7 @@ func (s *Snapshotter) Verify() {
 		s.t.Errorf("choose one of rewriteWithFailOnDiff and rewriteSnapshots, otherwise unexpected behavior can occur.")
 		return
 	}
-	nameSuffix := ""
-	if s.name != "" {
-		nameSuffix = "_" + strings.Replace(strings.Replace(s.name, "/", "-", -1), ":", "-", -1)
-	}
-	name := filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
+	name := s.SnapshotFileName()
 	if isRewrite() {
 		s.rewrite(name)
 	} else {
