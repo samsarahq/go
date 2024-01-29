@@ -636,6 +636,9 @@ func TestAs(t *testing.T) {
 	checkWrapper = nil
 	assert.True(t, oops.As(d, &checkWrapper))
 	assert.Equal(t, middle, checkWrapper)
+
+	assert.Panics(t, func() { oops.As(checkBase, nil) })
+	assert.Panics(t, func() { oops.As(base, interface{}(nil)) })
 }
 
 func TestOopsSkipFrame(t *testing.T) {
@@ -915,4 +918,177 @@ func stripPrecedingFromAllLines(errorString string, toStrip ...string) string {
 		builder.WriteRune('\n')
 	}
 	return builder.String()
+}
+
+type hasErrors interface {
+	Errors() []error
+}
+
+func TestAppendWrapsErrors(t *testing.T) {
+	err := oops.Errorf("a")
+	err = oops.Append(err, errors.New("b"))
+	merr, _ := err.(hasErrors)
+	for _, e := range merr.Errors() {
+		assert.IsType(t, oops.Errorf("thing"), e)
+	}
+}
+
+// We can append base errors to an oops multi-error, which are all wrapped correctly as oops errors
+func TestAppend(t *testing.T) {
+
+	testCases := []struct {
+		desc     string
+		left     error
+		right    error
+		expected []error
+	}{
+		{
+			desc:     "nil returns nil",
+			left:     nil,
+			right:    nil,
+			expected: nil,
+		},
+		{
+			desc:     "right is nil",
+			left:     errors.New("a"),
+			right:    nil,
+			expected: []error{oops.Errorf("a")},
+		},
+		{
+			desc:     "left is nil",
+			left:     nil,
+			right:    errors.New("b"),
+			expected: []error{oops.Errorf("b")},
+		},
+		{
+			desc:  "nested multierrors right",
+			left:  errors.New("a"),
+			right: oops.Append(errors.New("b"), errors.New("c")),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+			},
+		},
+		{
+			desc:  "nested multierrors left",
+			left:  oops.Append(errors.New("a"), errors.New("b")),
+			right: errors.New("c"),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+			},
+		},
+		{
+			desc:  "append multierror to multierror",
+			left:  oops.Append(errors.New("a"), errors.New("b")),
+			right: oops.Append(errors.New("c"), errors.New("d")),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+				oops.Errorf("d"),
+			},
+		},
+		{
+			desc:  "doubly nested multierror",
+			left:  oops.Append(errors.New("a"), oops.Append(errors.New("b"), errors.New("c"))),
+			right: errors.New("d"),
+			expected: []error{
+				oops.Errorf("a"),
+				oops.Errorf("b"),
+				oops.Errorf("c"),
+				oops.Errorf("d"),
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := oops.Append(tc.left, tc.right)
+			if tc.left == nil && tc.right == nil {
+				assert.Empty(t, result)
+				return
+			}
+
+			merr, ok := result.(hasErrors)
+			if !ok {
+				t.Errorf("Result was not oops.MultiError")
+			}
+
+			capturedErrors := merr.Errors()
+			for i, e := range capturedErrors {
+				_, ok := e.(reasonErr)
+				if !ok {
+					t.Errorf("Returned error does not implement Reason")
+				}
+				assert.Equal(t, oops.Cause(tc.expected[i]), oops.Cause(e))
+			}
+		})
+	}
+}
+
+// MultiError correctly implements Error(), and returns a concatenated list of all captured
+// errors, including stacktraces for each
+func TestMultiErrorError(t *testing.T) {
+	testCases := []struct {
+		err      error
+		expected string
+	}{
+		{
+			err: oops.Append(oops.Errorf("A terrible thing has occurred"), oops.Errorf("No, really")),
+			expected: `the following errors occurred:
+
+A terrible thing has occurred
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError: A terrible thing has occurred
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+
+---
+
+No, really
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError: No, really
+
+github.com/samsarahq/go/oops_test.TestMultiErrorError
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+	github.com/samsarahq/go/oops/oops_test.go:123
+testing.tRunner
+	testing/testing.go:123
+
+
+---
+
+`,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run("Error string", func(t *testing.T) {
+			traceback, err := stripPathPrefix(fixLineNumbers(tC.err.Error()))
+			assert.NoError(t, err)
+			assert.Equal(t, tC.expected, traceback)
+		})
+	}
 }
