@@ -2,6 +2,7 @@ package snapshotter
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 type T interface {
 	Name() string
+	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Helper()
 }
@@ -29,6 +31,39 @@ func isRewrite() bool {
 func isRewriteWithFailOnDiff() bool {
 	rewriteEnvVar := os.Getenv("REWRITE_WITH_FAIL_ON_DIFF") == "1"
 	return rewriteEnvVar || *rewriteWithFailOnDiff
+}
+
+type SnapshotMode int
+
+const (
+	SnapshotModeUndefined SnapshotMode = iota
+	// SnapshotModeCheck means a snapshot diff will fail the test, and the
+	// snapshot will not be updated.
+	SnapshotModeCheck
+	// SnapshotModeRewrite means a snapshot diff will be ignored, and the snapshot
+	// will be rewritten.
+	SnapshotModeRewrite
+	// SnapshotModeCheckAndRewrite means a snapshot diff will fail the test, and
+	// the snapshot will be updated.
+	SnapshotModeCheckAndRewrite
+)
+
+// GlobalSnapshotMode returns the snapshot mode configured in global state
+// via environment variables and/or command-line arguments.
+func GlobalSnapshotMode() (SnapshotMode, error) {
+	if isRewrite() && isRewriteWithFailOnDiff() {
+		return SnapshotModeUndefined, errors.New("choose one of rewriteWithFailOnDiff and rewriteSnapshots, otherwise unexpected behavior can occur.")
+	}
+
+	if isRewrite() {
+		return SnapshotModeRewrite, nil
+	}
+
+	if isRewriteWithFailOnDiff() {
+		return SnapshotModeCheckAndRewrite, nil
+	}
+
+	return SnapshotModeCheck, nil
 }
 
 func jsonRoundTrip(value interface{}) (interface{}, error) {
@@ -131,12 +166,13 @@ func (s *Snapshotter) SnapshotFileName() string {
 // rewrites the test output.
 func (s *Snapshotter) Verify() {
 	s.t.Helper()
-	if isRewrite() && isRewriteWithFailOnDiff() {
-		s.t.Errorf("choose one of rewriteWithFailOnDiff and rewriteSnapshots, otherwise unexpected behavior can occur.")
+	mode, err := GlobalSnapshotMode()
+	if err != nil {
+		s.t.Error(err)
 		return
 	}
 	name := s.SnapshotFileName()
-	if isRewrite() {
+	if mode == SnapshotModeRewrite {
 		s.rewrite(name)
 	} else {
 		// When no snapshots file exists and no snapshots have been taken, do nothing.
@@ -155,7 +191,7 @@ func (s *Snapshotter) Verify() {
 			return
 		}
 
-		if isRewriteWithFailOnDiff() {
+		if mode == SnapshotModeCheckAndRewrite {
 			s.rewrite(name)
 		}
 
