@@ -32,6 +32,10 @@ func (m *mockT) Errorf(format string, args ...interface{}) {
 	m.errors = append(m.errors, fmt.Sprintf(format, args...))
 }
 
+func (m *mockT) Error(args ...interface{}) {
+	m.errors = append(m.errors, fmt.Sprint(args...))
+}
+
 func TestSnapshotterFailed(t *testing.T) {
 	var m mockT
 	ss := snapshotter.New(&m)
