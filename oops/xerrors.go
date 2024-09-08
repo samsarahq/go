@@ -40,6 +40,7 @@ type Wrapper interface {
 	Unwrap() error
 }
 
+// Deprecated: use [errors.Unwrap] which is part of the standard library.
 // Unwrap returns the result of calling the Unwrap method on err, if err implements
 // Unwrap. Otherwise, Unwrap returns nil.
 func Unwrap(err error) error {
@@ -50,6 +51,7 @@ func Unwrap(err error) error {
 	return u.Unwrap()
 }
 
+// Deprecated: use [errors.Is] which is part of the standard library.
 // Is reports whether any error in err's chain matches target.
 //
 // An error is considered to match a target if it is equal to that target or if
@@ -71,6 +73,7 @@ func Is(err, target error) bool {
 	}
 }
 
+// Deprecated: use [errors.As] which is part of the standard library.
 // As finds the first error in err's chain that matches the type to which target
 // points, and if so, sets the target to its value and returns true. An error
 // matches a type if it is assignable to the target type, or if it has a method
