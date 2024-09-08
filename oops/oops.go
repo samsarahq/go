@@ -447,8 +447,11 @@ func Wrapf(err error, format string, a ...interface{}) error {
 	return wrapf(err, fmt.Sprintf(format, a...))
 }
 
-// Cause extracts the cause error of an oops error. If err is not an oops
-// error, err itself is returned.
+// Deprecated: Use [errors.Is] or [errors.As] which are part of the standard library.
+//
+// Note that the behaviour of Cause differs from [errors.Is] and [errors.As]. Cause follows the error chain as long as the error is an oopsError. When a non oopsError is encountered, Cause returns the inner error of the oopsError. [errors.Is] and [errors.As] will follow the error chain until it finds an error that matches the target type.
+//
+// Cause extracts the cause error of an oops error. If err is not an oops error, err itself is returned.
 //
 // You can use Cause to check if an error is an expected error. For example, if
 // you know than EOF error is fine, you can handle it with Cause.
