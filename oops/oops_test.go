@@ -910,6 +910,7 @@ func TestCollectMetadata(t *testing.T) {
 		"a": 1,
 		"d": "e",
 	}, "err3")
+	errNoMetadata := oops.WrapfWithMetadata(err, nil, "err no metadata")
 	nonOopsErr := fmt.Errorf("wraps oops err: %w", err1)
 
 	testCases := []struct {
@@ -946,6 +947,16 @@ func TestCollectMetadata(t *testing.T) {
 			want: map[string]interface{}{
 				"a": "b",
 			},
+		},
+		{
+			description: "metadata is empty when error has no metadata",
+			error:       errNoMetadata,
+			want:        map[string]interface{}{},
+		},
+		{
+			description: "metadata is nil when error is nil",
+			error:       nil,
+			want:        nil,
 		},
 	}
 
