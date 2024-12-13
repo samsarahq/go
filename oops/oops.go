@@ -63,6 +63,9 @@ type oopsError struct {
 	reason string
 	// index is the index of the stack frame where this oopsError was added.
 	index int
+	// metadata is a map of additional information included in the error.
+	// calling CollectMetadata() on an `oopsError` will return the aggregated metadata from the entire chain.
+	metadata map[string]interface{}
 }
 
 // Error implements error and outputs a full backtrace.
@@ -70,6 +73,24 @@ func (e *oopsError) Error() string {
 	var b strings.Builder
 	e.writeStackTrace(&b)
 	return b.String()
+}
+
+// CollectMetadata finds the first oopsError in err's chain and collects all metadata from oops errors in the chain.
+func CollectMetadata(err error) map[string]interface{} {
+	var target *oopsError
+	if ok := As(err, &target); !ok {
+		return nil
+	}
+
+	e := target
+	metadata := make(map[string]interface{})
+	for e != nil {
+		for k, v := range e.metadata {
+			metadata[k] = v
+		}
+		e = e.previous
+	}
+	return metadata
 }
 
 // MainStackToString writes the frames of the main goroutine to a string.
@@ -335,7 +356,7 @@ func isPrefix(a []uintptr, b []uintptr) bool {
 	return true
 }
 
-func wrapf(err error, reason string) error {
+func wrapf(err error, reason string) *oopsError {
 	inner := err
 	var previous *oopsError
 
@@ -447,14 +468,22 @@ func Wrapf(err error, format string, a ...interface{}) error {
 	return wrapf(err, fmt.Sprintf(format, a...))
 }
 
+// WrapfWithMetadata is like Wrapf but also sets the metadata given in the oops error
+// you can call CollectMetadata to retrieve the metadata later.
+func WrapfWithMetadata(err error, metadata map[string]interface{}, format string, a ...interface{}) error {
+	oopsErr := wrapf(err, fmt.Sprintf(format, a...))
+	if oopsErr == nil {
+		return nil
+	}
+	oopsErr.metadata = metadata
+	return oopsErr
+}
+
 // Deprecated: Use [errors.Is] or [errors.As] which are part of the standard library.
 //
 // Note that the behaviour of Cause differs from [errors.Is] and [errors.As]. Cause follows the error chain as long as the error is an oopsError. When a non oopsError is encountered, Cause returns the inner error of the oopsError. [errors.Is] and [errors.As] will follow the error chain until it finds an error that matches the target type.
 //
 // Cause extracts the cause error of an oops error. If err is not an oops error, err itself is returned.
-//
-// You can use Cause to check if an error is an expected error. For example, if
-// you know than EOF error is fine, you can handle it with Cause.
 func Cause(err error) error {
 	if e, ok := err.(*oopsError); ok {
 		return e.inner
