@@ -898,6 +898,67 @@ subsequent stack frames truncated
 	}
 }
 
+func TestCollectMetadata(t *testing.T) {
+	err := errors.New("oops")
+	err1 := oops.WrapfWithMetadata(err, map[string]interface{}{
+		"a": "b",
+	}, "err1")
+	err2 := oops.WrapfWithMetadata(err1, map[string]interface{}{
+		"c": 1,
+	}, "err2")
+	err3 := oops.WrapfWithMetadata(err1, map[string]interface{}{
+		"a": 1,
+		"d": "e",
+	}, "err3")
+	nonOopsErr := fmt.Errorf("wraps oops err: %w", err1)
+
+	testCases := []struct {
+		description string
+		error       error
+		want        map[string]interface{}
+	}{
+		{
+			description: "metadata is retrieved from oops error",
+			error:       err1,
+			want: map[string]interface{}{
+				"a": "b",
+			},
+		},
+		{
+			description: "metadata is aggregated from 2 oops errors",
+			error:       err2,
+			want: map[string]interface{}{
+				"a": "b",
+				"c": 1,
+			},
+		},
+		{
+			description: "metadata is aggregated from 2 oops errors and key deduplicated by selecting inner most value",
+			error:       err3,
+			want: map[string]interface{}{
+				"a": "b",
+				"d": "e",
+			},
+		},
+		{
+			description: "metadata is retrieved from non oops error wrapping an oops error",
+			error:       nonOopsErr,
+			want: map[string]interface{}{
+				"a": "b",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			metadata := oops.CollectMetadata(tc.error)
+
+			assert.Equal(t, tc.want, metadata)
+		})
+	}
+
+}
+
 // stripPrecedingFromAllLines strips the content in each line in errorString up until toStrip. It adds a '\t' character
 // in each line that it strips.
 func stripPrecedingFromAllLines(errorString string, toStrip ...string) string {
