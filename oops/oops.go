@@ -76,6 +76,7 @@ func (e *oopsError) Error() string {
 }
 
 // CollectMetadata finds the first oopsError in err's chain and collects all metadata from oops errors in the chain.
+// If multiple oops errors in the chain set the same metadata field, the outer-most one's value is used
 func CollectMetadata(err error) map[string]interface{} {
 	var target *oopsError
 	if ok := As(err, &target); !ok {
@@ -486,6 +487,9 @@ func WrapfWithMetadata(err error, metadata map[string]interface{}, format string
 // Note that the behaviour of Cause differs from [errors.Is] and [errors.As]. Cause follows the error chain as long as the error is an oopsError. When a non oopsError is encountered, Cause returns the inner error of the oopsError. [errors.Is] and [errors.As] will follow the error chain until it finds an error that matches the target type.
 //
 // Cause extracts the cause error of an oops error. If err is not an oops error, err itself is returned.
+//
+// You can use Cause to check if an error is an expected error. For example, if
+// you know than EOF error is fine, you can handle it with Cause.
 func Cause(err error) error {
 	if e, ok := err.(*oopsError); ok {
 		return e.inner
