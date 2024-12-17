@@ -86,7 +86,9 @@ func CollectMetadata(err error) map[string]interface{} {
 	metadata := make(map[string]interface{})
 	for e != nil {
 		for k, v := range e.metadata {
-			metadata[k] = v
+			if _, ok := metadata[k]; !ok {
+				metadata[k] = v
+			}
 		}
 		e = e.previous
 	}

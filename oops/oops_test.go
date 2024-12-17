@@ -933,10 +933,10 @@ func TestCollectMetadata(t *testing.T) {
 			},
 		},
 		{
-			description: "metadata is aggregated from 2 oops errors and key deduplicated by selecting inner most value",
+			description: "metadata is aggregated from 2 oops errors and key deduplicated by selecting outer most value",
 			error:       err3,
 			want: map[string]interface{}{
-				"a": "b",
+				"a": 1,
 				"d": "e",
 			},
 		},
