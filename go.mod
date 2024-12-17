@@ -1,4 +1,4 @@
-module github.com/samsarahq/go
+module github.com/danielcondemarin/go
 
 go 1.17
 
