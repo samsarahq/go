@@ -54,7 +54,7 @@ type stack struct {
 type oopsError struct {
 	// inner is the next non-oops error in the chain.
 	inner error
-	// previous is the previous oopsError, if any. This value is only used to follow stacktraces.
+	// previous is the previous oopsError, if any. This value is used to follow stacktraces and collect error metadata.
 	previous *oopsError
 	// stack is the current stacktrace. Might be the same as previous' stacktrace if that
 	// is another oopsError.
@@ -148,7 +148,7 @@ func writeSingleFrameTrace(b *strings.Builder, frames []Frame, framesSkipped boo
 // Unwrap returns the next error in the error chain.
 // If there is no next error, Unwrap returns nil.
 func (err *oopsError) Unwrap() error {
-	// Unwrap doesn't follow the err.previous chain because that chain is only
+	// Unwrap doesn't follow the err.previous chain because that chain is
 	// used for constructing Frames. err.inner is used for following wrapped error types.
 	if err.inner != nil {
 		return err.inner
@@ -474,6 +474,9 @@ func Wrapf(err error, format string, a ...interface{}) error {
 // WrapfWithMetadata is like Wrapf but also sets the metadata given in the oops error
 // you can call CollectMetadata to retrieve the metadata later.
 func WrapfWithMetadata(err error, metadata map[string]interface{}, format string, a ...interface{}) error {
+	if err == nil {
+		return nil
+	}
 	oopsErr := wrapf(err, fmt.Sprintf(format, a...))
 	if oopsErr == nil {
 		return nil
