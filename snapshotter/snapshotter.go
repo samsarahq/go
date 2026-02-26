@@ -66,6 +66,10 @@ func GlobalSnapshotMode() (SnapshotMode, error) {
 	return SnapshotModeCheck, nil
 }
 
+func sanitizeForPath(name string) string {
+	return strings.Replace(strings.Replace(name, "/", "-", -1), ":", "-", -1)
+}
+
 func jsonRoundTrip(value interface{}) (interface{}, error) {
 	bytes, err := json.Marshal(value)
 	if err != nil {
@@ -157,9 +161,9 @@ func (s *Snapshotter) SnapshotFileName() string {
 	s.t.Helper()
 	nameSuffix := ""
 	if s.name != "" {
-		nameSuffix = "_" + strings.Replace(strings.Replace(s.name, "/", "-", -1), ":", "-", -1)
+		nameSuffix = "_" + sanitizeForPath(s.name)
 	}
-	return filepath.Join("testdata", strings.Replace(strings.Replace(s.t.Name(), "/", "-", -1), ":", "-", -1)+nameSuffix+".snapshots.json")
+	return filepath.Join("testdata", sanitizeForPath(s.t.Name())+nameSuffix+".snapshots.json")
 }
 
 // Verify finishes a snapshot test. It either compares the test output, or it
