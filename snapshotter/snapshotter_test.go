@@ -101,7 +101,7 @@ func TestVerifyWithImage(t *testing.T) {
 
 	ss.Snapshot("color1", 255, 0, 0)
 	ss.Snapshot("color2", 0, 255, 0)
-	ss.Snapshot("color3", 0, 0, 255)
+	ss.Snapshot("color3", 128, 0, 128)
 }
 
 func TestSnapshotFileName(t *testing.T) {
