@@ -67,7 +67,7 @@ func GlobalSnapshotMode() (SnapshotMode, error) {
 }
 
 func sanitizeForPath(name string) string {
-	return strings.Replace(strings.Replace(name, "/", "-", -1), ":", "-", -1)
+	return strings.ReplaceAll(strings.ReplaceAll(name, "/", "-"), ":", "-")
 }
 
 func jsonRoundTrip(value interface{}) (interface{}, error) {
