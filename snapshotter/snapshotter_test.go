@@ -2,6 +2,8 @@ package snapshotter_test
 
 import (
 	"fmt"
+	"image"
+	"image/color"
 	"os"
 	"strings"
 	"testing"
@@ -76,6 +78,30 @@ func TestSnapshotterInvalidFlags(t *testing.T) {
 	if len(m.errors) == 0 || !strings.Contains(m.errors[0], "choose one of rewriteWithFailOnDiff and rewriteSnapshots") {
 		t.Errorf("expected error, got %v", m.errors)
 	}
+}
+
+func TestVerifyWithImage(t *testing.T) {
+	renderFn := func(values []interface{}) (image.Image, error) {
+		length := 256
+		r := uint8(values[0].(float64))
+		g := uint8(values[1].(float64))
+		b := uint8(values[2].(float64))
+		img := image.NewRGBA(image.Rect(0, 0, length, length))
+		c := color.RGBA{R: r, G: g, B: b, A: 255}
+		for x := 0; x < length; x++ {
+			for y := 0; y < length; y++ {
+				img.Set(x, y, c)
+			}
+		}
+		return img, nil
+	}
+
+	ss := snapshotter.New(t)
+	defer ss.VerifyWithImage(renderFn)
+
+	ss.Snapshot("color1", 255, 0, 0)
+	ss.Snapshot("color2", 0, 255, 0)
+	ss.Snapshot("color3", 0, 0, 255)
 }
 
 func TestSnapshotFileName(t *testing.T) {

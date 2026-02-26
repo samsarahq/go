@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"image"
+	"image/png"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -34,6 +36,8 @@ func isRewriteWithFailOnDiff() bool {
 }
 
 type SnapshotMode int
+
+type RenderFn func(values []interface{}) (image.Image, error)
 
 const (
 	SnapshotModeUndefined SnapshotMode = iota
@@ -235,6 +239,58 @@ func (s *Snapshotter) Verify() {
 				s.t.Errorf("If this is intentional, you can run `go test . -rewriteSnapshots` to generate new snapshots.")
 			}
 		}
+	}
+}
+
+// VerifyWithImage calls Verify and, when rewriting snapshots, renders PNG
+// images for each snapshot using the provided renderFn. Images are written to a
+// sub-directory derived from the snapshot file name.
+func (s *Snapshotter) VerifyWithImage(renderFn RenderFn) {
+	s.t.Helper()
+	s.Verify()
+
+	mode, err := GlobalSnapshotMode()
+	if err != nil {
+		return
+	}
+
+	if mode != SnapshotModeRewrite && mode != SnapshotModeCheckAndRewrite {
+		return
+	}
+
+	if len(s.snapshots) == 0 {
+		return
+	}
+
+	dir := strings.TrimSuffix(s.SnapshotFileName(), ".snapshots.json")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		s.t.Errorf("error creating image directory %s: %s", dir, err)
+		return
+	}
+
+	for _, snap := range s.snapshots {
+		sanitizedName := sanitizeForPath(snap.Name)
+		pngPath := filepath.Join(dir, sanitizedName+".png")
+
+		img, err := renderFn(snap.Values)
+		if err != nil {
+			s.t.Errorf("error rendering image for snapshot %s: %s", snap.Name, err)
+			continue
+		}
+
+		f, err := os.Create(pngPath)
+		if err != nil {
+			s.t.Errorf("error creating PNG file %s: %s", pngPath, err)
+			continue
+		}
+
+		if err := png.Encode(f, img); err != nil {
+			f.Close()
+			s.t.Errorf("error encoding PNG for snapshot %s: %s", snap.Name, err)
+			continue
+		}
+
+		f.Close()
 	}
 }
 
