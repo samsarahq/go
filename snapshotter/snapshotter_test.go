@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -36,6 +37,44 @@ func (m *mockT) Errorf(format string, args ...interface{}) {
 
 func (m *mockT) Error(args ...interface{}) {
 	m.errors = append(m.errors, fmt.Sprint(args...))
+}
+
+func switchToTempWorkingDir(t *testing.T) {
+	t.Helper()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %s", err)
+	}
+
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to switch to temp directory: %s", err)
+	}
+
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Errorf("failed to restore working directory: %s", err)
+		}
+	})
+}
+
+func setRewriteSnapshotsEnv(t *testing.T) {
+	t.Helper()
+
+	previousValue := os.Getenv("REWRITE_SNAPSHOTS")
+	if err := os.Setenv("REWRITE_SNAPSHOTS", "1"); err != nil {
+		t.Fatalf("failed to set REWRITE_SNAPSHOTS: %s", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Setenv("REWRITE_SNAPSHOTS", previousValue); err != nil {
+			t.Errorf("failed to restore REWRITE_SNAPSHOTS: %s", err)
+		}
+	})
+}
+
+func tinyRenderFn(_ []interface{}) (image.Image, error) {
+	return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
 }
 
 func TestSnapshotterFailed(t *testing.T) {
@@ -102,6 +141,59 @@ func TestVerifyWithImage(t *testing.T) {
 	ss.Snapshot("color1", 255, 0, 0)
 	ss.Snapshot("color2", 0, 255, 0)
 	ss.Snapshot("color3", 128, 0, 128)
+}
+
+func TestVerifyWithImageSnapshotRemoved(t *testing.T) {
+	switchToTempWorkingDir(t)
+	setRewriteSnapshotsEnv(t)
+
+	ss := snapshotter.New(t)
+	ss.Snapshot("a", 1)
+	ss.Snapshot("b", 2)
+	ss.Snapshot("c", 3)
+	ss.VerifyWithImage(tinyRenderFn)
+
+	dir := strings.TrimSuffix(ss.SnapshotFileName(), ".snapshots.json")
+	for _, fileName := range []string{"a.png", "b.png", "c.png"} {
+		if _, err := os.Stat(filepath.Join(dir, fileName)); err != nil {
+			t.Fatalf("expected %s to exist after first rewrite: %s", fileName, err)
+		}
+	}
+
+	ss = snapshotter.New(t)
+	ss.Snapshot("a", 1)
+	ss.Snapshot("c", 3)
+	ss.VerifyWithImage(tinyRenderFn)
+
+	if _, err := os.Stat(filepath.Join(dir, "b.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale b.png to be removed, got err: %s", err)
+	}
+	for _, fileName := range []string{"a.png", "c.png"} {
+		if _, err := os.Stat(filepath.Join(dir, fileName)); err != nil {
+			t.Fatalf("expected %s to exist after second rewrite: %s", fileName, err)
+		}
+	}
+}
+
+func TestVerifyWithImageNoSnapshots(t *testing.T) {
+	switchToTempWorkingDir(t)
+	setRewriteSnapshotsEnv(t)
+
+	ss := snapshotter.New(t)
+	ss.Snapshot("only", 1)
+	ss.VerifyWithImage(tinyRenderFn)
+
+	dir := strings.TrimSuffix(ss.SnapshotFileName(), ".snapshots.json")
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("expected image directory to exist after first rewrite: %s", err)
+	}
+
+	ss = snapshotter.New(t)
+	ss.VerifyWithImage(tinyRenderFn)
+
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("expected image directory to be removed, got err: %s", err)
+	}
 }
 
 func TestSnapshotFileName(t *testing.T) {
