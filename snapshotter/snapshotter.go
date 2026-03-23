@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/pmezard/go-difflib/difflib"
@@ -71,7 +72,13 @@ func GlobalSnapshotMode() (SnapshotMode, error) {
 }
 
 func sanitizeForPath(name string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(name, "/", "-"), ":", "-")
+	sanitized := strings.ReplaceAll(strings.ReplaceAll(name, "/", "-"), ":", "-")
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return '_'
+		}
+		return r
+	}, sanitized)
 }
 
 func jsonRoundTrip(value interface{}) (interface{}, error) {
