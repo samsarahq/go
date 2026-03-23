@@ -175,6 +175,25 @@ func TestVerifyWithImageSnapshotRemoved(t *testing.T) {
 	}
 }
 
+func TestVerifyWithImageWhitespacesInSnapshotName(t *testing.T) {
+	switchToTempWorkingDir(t)
+	setRewriteSnapshotsEnv(t)
+
+	ss := snapshotter.New(t)
+	snapshotName := "name with spaces"
+	ss.Snapshot(snapshotName, 1)
+	ss.VerifyWithImage(tinyRenderFn)
+
+	dir := strings.TrimSuffix(ss.SnapshotFileName(), ".snapshots.json")
+	imagePath := filepath.Join(dir, "name_with_spaces.png")
+	if _, err := os.Stat(imagePath); err != nil {
+		t.Fatalf("expected %s to exist after rewrite: %s", imagePath, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, snapshotName+".png")); !os.IsNotExist(err) {
+		t.Fatalf("expected image file with spaces to not exist, got err: %s", err)
+	}
+}
+
 func TestVerifyWithImageNoSnapshots(t *testing.T) {
 	switchToTempWorkingDir(t)
 	setRewriteSnapshotsEnv(t)
@@ -203,8 +222,8 @@ func TestSnapshotFileName(t *testing.T) {
 		t.Errorf("expected %s, got %s", expected, ss.SnapshotFileName())
 	}
 
-	ss2 := snapshotter.NewNamed(t, "foobar")
-	expected = fmt.Sprintf("testdata/%s_foobar.snapshots.json", t.Name())
+	ss2 := snapshotter.NewNamed(t, "foo bar")
+	expected = fmt.Sprintf("testdata/%s_foo_bar.snapshots.json", t.Name())
 	if expected != ss2.SnapshotFileName() {
 		t.Errorf("expected %s, got %s", expected, ss2.SnapshotFileName())
 	}
