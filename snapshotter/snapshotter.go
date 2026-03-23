@@ -258,11 +258,16 @@ func (s *Snapshotter) VerifyWithImage(renderFn RenderFn) {
 		return
 	}
 
+	dir := strings.TrimSuffix(s.SnapshotFileName(), ".snapshots.json")
+	if err := os.RemoveAll(dir); err != nil {
+		s.t.Errorf("failed to remove image directory %s: %s", dir, err)
+		return
+	}
+
 	if len(s.snapshots) == 0 {
 		return
 	}
 
-	dir := strings.TrimSuffix(s.SnapshotFileName(), ".snapshots.json")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		s.t.Errorf("error creating image directory %s: %s", dir, err)
 		return
