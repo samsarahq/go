@@ -232,11 +232,6 @@ func framesWithSkipInfo(err error) ([][]Frame, []bool) {
 				break
 			}
 
-			i := strings.LastIndex(file, "/src/")
-			if i >= 0 {
-				file = file[i+len("/src/"):]
-			}
-
 			parsedFrames = append(parsedFrames, Frame{
 				File:     file,
 				Function: frame.Function,
